@@ -69,6 +69,38 @@ app.get("/dev/seed",  async (req, res) => {
   }
 });
 
+// =========================
+// DEV ONLY - CLEAR DATABASE
+// =========================
+app.get("/dev/clear-db", async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ msg: "Disabled in production" });
+    }
+
+    // Disable FK checks (IMPORTANT)
+    await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 0");
+
+    // Get all models dynamically
+    for (const modelName of Object.keys(db)) {
+      if (db[modelName]?.destroy) {
+        await db[modelName].destroy({
+          where: {},
+          truncate: true,
+          force: true,
+        });
+      }
+    }
+
+    // Enable FK checks again
+    await db.sequelize.query("SET FOREIGN_KEY_CHECKS = 1");
+
+    res.json({ msg: "Database cleared successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // =========================
 // 2. GET ALL DATA
@@ -110,6 +142,6 @@ app.get("/dev/clear",  async (req, res) => {
 
 
 
-db.sequelize.sync().then(() => {
+db.sequelize.sync({ alter: true }).then(() => {
   app.listen(port, () => console.log("Server running"));
 });

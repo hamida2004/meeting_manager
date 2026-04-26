@@ -5,7 +5,7 @@ const db = require("../models");
 const generateAccessToken = (user) => {
   return jwt.sign(
     { id: user.id_user },
-    process.env.JWT_SECRET,
+    process.env.ACCESS_TOKEN_SECRET,
     { expiresIn: "1h" }
   );
 };
@@ -13,7 +13,7 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = (user) => {
   return jwt.sign(
     { id: user.id_user },
-    process.env.JWT_REFRESH_SECRET,
+    process.env.REFRESH_TOKEN_SECRET,
     { expiresIn: "7d" }
   );
 };
@@ -62,7 +62,6 @@ exports.login = async (req, res) => {
 
     res.json({
       accessToken,
-      refreshToken,
     });
   } catch (err) {
     res.status(500).json(err.message);
