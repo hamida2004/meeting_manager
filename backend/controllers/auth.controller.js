@@ -1,6 +1,8 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const db = require("../models");
+const crypto = require("crypto");
+
 
 const generateAccessToken = (user) => {
   return jwt.sign(
@@ -16,6 +18,19 @@ const generateRefreshToken = (user) => {
     process.env.REFRESH_TOKEN_SECRET,
     { expiresIn: "7d" }
   );
+};
+
+
+exports.me = async (req, res) => {
+  const { id_user, full_name, email, role } = req.user;
+  res.json({ id_user, full_name, email, role });
+};
+
+exports.logout = async (req, res) => {
+  // if you store refresh_token, invalidate it:
+  req.user.refresh_token = null;
+  await req.user.save();
+  res.json({ msg: "Logged out" });
 };
 
 // =========================
@@ -68,20 +83,64 @@ exports.login = async (req, res) => {
   }
 };
 
-// =========================
-// LOGOUT
-// =========================
-exports.logout = async (req, res) => {
+
+
+
+const { sendResetEmail } = require("../utils/mailer");
+
+exports.requestReset = async (req, res) => {
   try {
-    const user = await db.User.findByPk(req.user.id);
+    const { email } = req.body;
 
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    const user = await db.User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
 
-    // 🔴 REMOVE REFRESH TOKEN
-    user.refresh_token = null;
+    const token = crypto.randomBytes(32).toString("hex");
+
+    user.reset_token = token;
+    user.reset_token_expire = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
-    res.json({ msg: "Logged out successfully" });
+    await sendResetEmail(email, token);
+
+    res.json({ msg: "Reset email sent" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json("Error sending email");
+  }
+};
+// =========================
+// RESET PASSWORD
+// =========================
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const user = await db.User.findOne({
+      where: { reset_token: token },
+    });
+
+    if (!user) {
+      return res.status(400).json({ msg: "Invalid token" });
+    }
+
+    if (user.reset_token_expire < new Date()) {
+      return res.status(400).json({ msg: "Token expired" });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    user.password = hash;
+    user.reset_token = null;
+    user.reset_token_expire = null;
+
+    await user.save();
+
+    res.json({ msg: "Password updated successfully" });
+
   } catch (err) {
     res.status(500).json(err.message);
   }

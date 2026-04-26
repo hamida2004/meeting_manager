@@ -12,6 +12,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      reset_token: {
+  type: DataTypes.STRING,
+  allowNull: true,
+},
+reset_token_expire: {
+  type: DataTypes.DATE,
+  allowNull: true,
+}
     },
     {
       tableName: "users",

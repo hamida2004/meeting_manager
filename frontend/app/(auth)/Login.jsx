@@ -42,7 +42,7 @@ export default function LoginScreen() {
     // 👉 store token later (SecureStore)
     await SecureStore.setItemAsync("token", data.accessToken);
 
-    router.replace("/(tabs)/home");
+    router.replace("/(tabs)/Home");
 
   } catch (err) {
     console.log(err);

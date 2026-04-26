@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-nativ
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "../../context/langContext";
+import { API_URL } from "../../services/api";
 
 
 export default function ResetPasswordScreen() {
@@ -10,17 +11,39 @@ export default function ResetPasswordScreen() {
 
   const [email, setEmail] = useState("");
 
-  const handleReset = () => {
-    if (!email) {
-      alert(t("fillAllFields"));
+const handleReset = async () => {
+  if (!email) {
+    alert(t("fillAllFields"));
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/auth/request-reset`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.msg || "Error");
       return;
     }
 
-    console.log("Reset password for:", email);
+    console.log("RESET TOKEN:", data.token); // 🔴 temporary
 
-    alert(t("resetSent"));
-    router.back();
-  };
+    alert("Check console for reset token (dev mode)");
+
+    // 👉 navigate to reset screen
+    router.push("/(auth)/NewPassword");
+
+  } catch (err) {
+    alert("Network error");
+  }
+};
 
   return (
     <View style={styles.container}>
