@@ -23,7 +23,9 @@ const generateRefreshToken = (user) => {
 
 exports.me = async (req, res) => {
   const { id_user, full_name, email, role } = req.user;
+  console.log(req.user)
   res.json({ id_user, full_name, email, role });
+ 
 };
 
 exports.logout = async (req, res) => {

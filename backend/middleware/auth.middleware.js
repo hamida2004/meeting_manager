@@ -3,6 +3,7 @@ const db = require("../models");
 
 module.exports = (requiredRole = null) => {
   return async (req, res, next) => {
+    console.log("Auth middleware hit");
     try {
       const header = req.headers["authorization"];
 
@@ -15,10 +16,14 @@ module.exports = (requiredRole = null) => {
         ? header.split(" ")[1]
         : header;
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
-      // ✅ fetch full user
+      
+      console.log("Before DB query");
+
       const user = await db.User.findByPk(decoded.id);
+
+      console.log("After DB query");
       if (!user) {
         return res.status(404).json({ msg: "User not found" });
       }
@@ -43,6 +48,7 @@ module.exports = (requiredRole = null) => {
       next();
 
     } catch (err) {
+      console.log(err)
       return res.status(401).json({ msg: "Invalid token" });
     }
   };

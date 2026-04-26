@@ -6,7 +6,7 @@ const auth = require("../middleware/auth.middleware");
 router.post("/register", ctrl.register);
 router.post("/login", ctrl.login);
 router.post("/request-reset", ctrl.requestReset);
-router.get("/me", auth, ctrl.me);
-router.post("/logout", auth, ctrl.logout);
+router.get("/me", auth(), ctrl.me);
+router.post("/logout", auth(), ctrl.logout);
 
 module.exports = router;
