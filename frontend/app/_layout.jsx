@@ -2,10 +2,11 @@ import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { TranslationProvider } from "../context/langContext";
+import * as SecureStore from "expo-secure-store";
 
-// ⚠️ Replace later with real auth logic (JWT / SecureStore)
-const fakeAuthCheck = async () => {
-  return true; // change to true if user is logged in
+const AuthCheck = async () => {
+  const token = await SecureStore.getItemAsync("token");
+  return !!token;
 };
 
 export default function RootLayout() {
@@ -14,7 +15,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const result = await fakeAuthCheck();
+      const result = await AuthCheck();
       setIsAuthenticated(result);
       setIsLoading(false);
     };

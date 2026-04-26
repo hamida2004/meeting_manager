@@ -1,0 +1,1 @@
+export const API_URL = "https://meeting-manager-7nuo.onrender.com";

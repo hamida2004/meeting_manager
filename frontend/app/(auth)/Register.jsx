@@ -2,6 +2,9 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-nativ
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "../../context/langContext";
+import { API_URL } from "../../services/api";
+
+
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -11,20 +14,46 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleRegister = () => {
-    if (!name || !email || !password) {
-      alert(t("fillAllFields"));
+  const handleRegister = async () => {
+  if (!name || !email || !password) {
+    alert(t("fillAllFields"));
+    return;
+  }
+
+  if (password.length < 6) {
+    alert(t("passwordLength"));
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        full_name: name,
+        email,
+        password,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.msg || "Register failed");
       return;
     }
 
-    if (password.length < 6) {
-      alert(t("passwordLength"));
-      return;
-    }
+    console.log("REGISTER SUCCESS:", data);
 
-    console.log({ name, email, password });
-    router.replace("/(auth)/login");
-  };
+    router.replace("/(auth)/Login");
+
+  } catch (err) {
+    console.log(err);
+    alert("Network error");
+  }
+};
 
   return (
     <View style={styles.container}>

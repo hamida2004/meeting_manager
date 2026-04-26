@@ -2,6 +2,9 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-nativ
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "../../context/langContext";
+import * as SecureStore from "expo-secure-store";
+import { API_URL } from "../../services/api";
+
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -9,15 +12,43 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = () => {
-    if (!email || !password) {
-      alert(t("fillAllFields"));
+
+  const handleLogin = async () => {
+  if (!email || !password) {
+    alert(t("fillAllFields"));
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+    console.log(res,'////')
+
+      alert(data.msg || "Login failed");
+      
       return;
     }
+    console.log("LOGIN SUCCESS:", data);
 
-    console.log({ email, password });
+    // 👉 store token later (SecureStore)
+    await SecureStore.setItemAsync("token", data.accessToken);
+
     router.replace("/(tabs)/home");
-  };
+
+  } catch (err) {
+    console.log(err);
+    alert("Network error");
+  }
+};
 
   return (
     <View style={styles.container}>
