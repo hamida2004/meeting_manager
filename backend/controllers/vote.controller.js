@@ -1,16 +1,24 @@
 const db = require("../models");
 
+// VOTE ONCE
 exports.vote = async (req, res) => {
-  try {
-    const vote = await db.Vote.create({
-      vote: req.body.vote,
-      UserId: req.user.id,
-      AgendaPointId: req.body.agenda_point_id,
-      vote_at: new Date(),
-    });
+  const exists = await db.Vote.findOne({
+    where: {
+      id_user: req.user.id_user,
+      id_agenda_point: req.params.id,
+    },
+  });
 
-    res.json(vote);
-  } catch (err) {
-    res.status(400).json({ msg: "Already voted" });
+  if (exists) {
+    return res.status(400).json({ msg: "Already voted" });
   }
+
+  const vote = await db.Vote.create({
+    id_user: req.user.id_user,
+    id_agenda_point: req.params.id,
+    vote: req.body.vote,
+    vote_at: new Date(),
+  });
+
+  res.json(vote);
 };

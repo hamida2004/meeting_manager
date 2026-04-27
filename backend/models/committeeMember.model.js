@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     "CommitteeMember",
     {
       id_user: DataTypes.BIGINT,
-      commitee_id: DataTypes.BIGINT,
+      committee_id: DataTypes.BIGINT,
       role_id: DataTypes.BIGINT,
     },
     {

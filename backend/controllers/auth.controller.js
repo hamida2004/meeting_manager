@@ -3,7 +3,9 @@ const jwt = require("jsonwebtoken");
 const db = require("../models");
 const crypto = require("crypto");
 
-
+// =========================
+// TOKEN GENERATION
+// =========================
 const generateAccessToken = (user) => {
   return jwt.sign(
     { id: user.id_user },
@@ -21,26 +23,53 @@ const generateRefreshToken = (user) => {
 };
 
 
+
+// =========================
+// GET CURRENT USER
+// =========================
 exports.me = async (req, res) => {
-  const { id_user, full_name, email, role } = req.user;
-  console.log(req.user)
-  res.json({ id_user, full_name, email, role });
- 
+  try {
+    const { id_user, full_name, email, is_admin } = req.user;
+
+    res.json({
+      id_user,
+      full_name,
+      email,
+      role: is_admin ? "admin" : "user",
+    });
+
+  } catch (err) {
+    res.status(500).json(err.message);
+  }
 };
 
+
+
+// =========================
+// LOGOUT
+// =========================
 exports.logout = async (req, res) => {
-  // if you store refresh_token, invalidate it:
-  req.user.refresh_token = null;
-  await req.user.save();
-  res.json({ msg: "Logged out" });
+  try {
+    req.user.refresh_token = null;
+    await req.user.save();
+
+    res.json({ msg: "Logged out" });
+  } catch (err) {
+    res.status(500).json(err.message);
+  }
 };
+
+
 
 // =========================
 // REGISTER
 // =========================
 exports.register = async (req, res) => {
   try {
-    const { full_name, email, password } = req.body;
+    const { full_name, email, password, is_admin } = req.body;
+
+    // prevent admin creation from public
+    const safeIsAdmin = false;
 
     const hash = await bcrypt.hash(password, 10);
 
@@ -48,38 +77,55 @@ exports.register = async (req, res) => {
       full_name,
       email,
       password: hash,
+      is_admin: safeIsAdmin, // 🔒 force false
     });
 
-    res.json(user);
+    res.json({
+      id_user: user.id_user,
+      full_name: user.full_name,
+      email: user.email,
+      is_admin: user.is_admin,
+    });
+
   } catch (err) {
     res.status(500).json(err.message);
   }
 };
+
+
 
 // =========================
 // LOGIN
 // =========================
 exports.login = async (req, res) => {
   try {
+    const { email, password } = req.body;
+
     const user = await db.User.findOne({
-      where: { email: req.body.email },
+      where: { email },
     });
 
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
 
-    const valid = await bcrypt.compare(req.body.password, user.password);
-    if (!valid) return res.status(401).json({ msg: "Wrong password" });
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
+      return res.status(401).json({ msg: "Wrong password" });
+    }
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // 🔴 SAVE REFRESH TOKEN IN DB
     user.refresh_token = refreshToken;
     await user.save();
 
     res.json({
       accessToken,
+      role: user.is_admin ? "admin" : "user",
     });
+
   } catch (err) {
     res.status(500).json(err.message);
   }
@@ -87,7 +133,9 @@ exports.login = async (req, res) => {
 
 
 
-
+// =========================
+// REQUEST PASSWORD RESET
+// =========================
 const { sendResetEmail } = require("../utils/mailer");
 
 exports.requestReset = async (req, res) => {
@@ -95,6 +143,7 @@ exports.requestReset = async (req, res) => {
     const { email } = req.body;
 
     const user = await db.User.findOne({ where: { email } });
+
     if (!user) {
       return res.status(404).json({ msg: "User not found" });
     }
@@ -103,6 +152,7 @@ exports.requestReset = async (req, res) => {
 
     user.reset_token = token;
     user.reset_token_expire = new Date(Date.now() + 15 * 60 * 1000);
+
     await user.save();
 
     await sendResetEmail(email, token);
@@ -110,10 +160,12 @@ exports.requestReset = async (req, res) => {
     res.json({ msg: "Reset email sent" });
 
   } catch (err) {
-    console.error(err);
     res.status(500).json("Error sending email");
   }
 };
+
+
+
 // =========================
 // RESET PASSWORD
 // =========================

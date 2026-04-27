@@ -6,12 +6,15 @@ module.exports = (sequelize, DataTypes) => {
       full_name: DataTypes.STRING,
       email: { type: DataTypes.STRING, unique: true, allowNull: false },
       password: DataTypes.STRING,
-
       // 🔴 NEW FIELD
       refresh_token: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      is_admin: {
+  type: DataTypes.BOOLEAN,
+  defaultValue: false
+},
       reset_token: {
   type: DataTypes.STRING,
   allowNull: true,

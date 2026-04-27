@@ -1,7 +1,8 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/vote.controller");
-const auth = require("../middleware/auth.middleware");
+const { auth, isMeetingMember, canVote } = require("../middleware/auth.middleware");
 
-router.post("/", auth, ctrl.vote);
+// vote once
+router.post("/:id", auth(), isMeetingMember, canVote, ctrl.vote);
 
 module.exports = router;

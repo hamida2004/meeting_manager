@@ -4,6 +4,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       id_draft: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
       created_at: DataTypes.DATE,
+      last_update_at: DataTypes.DATE,
       id_meeting: { type: DataTypes.BIGINT, unique: true },
     },
     {

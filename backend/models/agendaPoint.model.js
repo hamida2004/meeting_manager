@@ -4,9 +4,10 @@ module.exports = (sequelize, DataTypes) => {
     {
       id_point: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
       content: DataTypes.STRING,
-      voting_state: DataTypes.ENUM("open", "closed"),
       meeting_id: DataTypes.BIGINT,
       proposed_by: DataTypes.BIGINT,
+      state: DataTypes.ENUM("confirmed", "pending","canceled"),
+      
     },
     {
       tableName: "agenda_points",

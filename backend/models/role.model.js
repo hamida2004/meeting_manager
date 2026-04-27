@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     "Role",
     {
       id_role: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      role_name: DataTypes.ENUM("president", "reporter", "member"),
+      role_name: DataTypes.ENUM("admin", "member"),
     },
     {
       tableName: "roles",

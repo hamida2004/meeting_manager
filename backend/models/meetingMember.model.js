@@ -4,8 +4,10 @@ module.exports = (sequelize, DataTypes) => {
     {
       id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
       id_meeting: DataTypes.BIGINT,
-      id_member: DataTypes.BIGINT,
-      present: DataTypes.BOOLEAN,
+      id_user: DataTypes.BIGINT,
+      invited: DataTypes.BOOLEAN,
+      confirmed: DataTypes.BOOLEAN,
+      attended: DataTypes.BOOLEAN,
     },
     {
       tableName: "meeting_members",
