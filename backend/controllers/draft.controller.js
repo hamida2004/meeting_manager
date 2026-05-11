@@ -1,49 +1,85 @@
-const { Vote, AgendaPoint, Meeting, MeetingMember } = require("../models");
+const { Draft, DraftPoint, Meeting, User } = require("../models");
 
-// POST /votes/:id   (id = id_agenda_point)
-// body: { vote: "agree" | "disagree" | "abstain" }
-// middleware chain: auth() → isMeetingMember → canVote
-exports.vote = async (req, res) => {
+// GET /drafts/:id   (id = id_draft)
+exports.getDraft = async (req, res) => {
   try {
-    const agendaPointId = req.params.id;
-    const { vote } = req.body;
-
-    const validVotes = ["agree", "disagree", "abstain"];
-    if (!validVotes.includes(vote))
-      return res.status(400).json({ msg: `vote must be one of: ${validVotes.join(", ")}.` });
-
-    // Fetch the agenda point to check its meeting
-    const point = await AgendaPoint.findByPk(agendaPointId);
-    if (!point) return res.status(404).json({ msg: "Agenda point not found." });
-
-    // Check the meeting has voting open
-    const meeting = await Meeting.findByPk(point.meeting_id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-
-    if (meeting.voting_state !== "open")
-      return res.status(403).json({ msg: "Voting is not open for this meeting." });
-
-    if (point.state !== "confirmed")
-      return res.status(403).json({ msg: "This agenda point has not been confirmed for voting." });
-
-    // Check for duplicate vote (also enforced by DB unique index)
-    const existing = await Vote.findOne({
-      where: { id_user: req.user.id, id_agenda_point: agendaPointId },
+    const draft = await Draft.findByPk(req.params.id, {
+      include: [
+        {
+          model: DraftPoint,
+          include: [{ model: User, foreignKey: "added_by", attributes: ["id_user", "full_name"] }],
+          order: [["added_at", "ASC"]],
+        },
+      ],
     });
-    if (existing) return res.status(409).json({ msg: "You have already voted on this point." });
-
-    const newVote = await Vote.create({
-      vote,
-      id_user: req.user.id,
-      id_agenda_point: agendaPointId,
-      vote_at: new Date(),
-    });
-
-    return res.status(201).json({ msg: "Vote recorded.", vote: newVote });
+    if (!draft) return res.status(404).json({ msg: "Draft not found." });
+    return res.json(draft);
   } catch (err) {
-    // Handle DB-level unique constraint violation
-    if (err.name === "SequelizeUniqueConstraintError")
-      return res.status(409).json({ msg: "You have already voted on this point." });
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
+  }
+};
+
+// GET /drafts/meeting/:meetingId
+exports.getDraftByMeeting = async (req, res) => {
+  try {
+    const draft = await Draft.findOne({
+      where: { id_meeting: req.params.meetingId },
+      include: [
+        {
+          model: DraftPoint,
+          include: [{ model: User, foreignKey: "added_by", attributes: ["id_user", "full_name"] }],
+          order: [["added_at", "ASC"]],
+        },
+      ],
+    });
+    if (!draft) return res.status(404).json({ msg: "Draft not found for this meeting." });
+    return res.json(draft);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
+  }
+};
+
+// POST /drafts/:id   — add or edit a draft point
+// body: { content, pointId? }
+//   • if pointId is given → edit that DraftPoint
+//   • otherwise → add a new DraftPoint
+exports.editDraft = async (req, res) => {
+  try {
+    const draft = await Draft.findByPk(req.params.id);
+    if (!draft) return res.status(404).json({ msg: "Draft not found." });
+
+    const { content, pointId } = req.body;
+    if (!content || !content.trim())
+      return res.status(400).json({ msg: "content is required." });
+
+    let point;
+    if (pointId) {
+      // Edit existing point — only the author can edit their own point
+      point = await DraftPoint.findOne({ where: { id_point: pointId, id_draft: draft.id_draft } });
+      if (!point) return res.status(404).json({ msg: "Draft point not found." });
+
+      if (Number(point.added_by) !== Number(req.user.id))
+        return res.status(403).json({ msg: "You can only edit your own draft points." });
+
+      await point.update({ content: content.trim(), edited_at: new Date() });
+    } else {
+      // Add new point
+      point = await DraftPoint.create({
+        content: content.trim(),
+        id_draft: draft.id_draft,
+        added_by: req.user.id,
+        added_at: new Date(),
+        edited_at: null,
+      });
+    }
+
+    // Update draft's last_update_at
+    await draft.update({ last_update_at: new Date() });
+
+    return res.status(pointId ? 200 : 201).json(point);
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ msg: "Server error." });
   }

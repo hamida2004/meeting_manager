@@ -2,7 +2,7 @@ const router = require("express").Router();
 const ctrl = require("../controllers/meeting.controller");
 const { auth, isMeetingCreator, isMeetingMember } = require("../middleware/auth.middleware");
 
-router.post("/", auth(), ctrl.createMeeting);
+router.post("/", ctrl.createMeeting);
 router.get("/member", auth(), ctrl.getMeetingsByMember);
 router.get("/", auth(), ctrl.getAllMeetings);        // ADD: Meetings tab needs this
 router.get("/:id", auth(), isMeetingMember, ctrl.getMeetingById); // ADD: [id].jsx needs this
