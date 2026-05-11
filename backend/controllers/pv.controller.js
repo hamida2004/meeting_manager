@@ -1,107 +1,80 @@
-const db = require("../models");
+const { Pv, PvPoint, Draft, DraftPoint, Meeting } = require("../models");
 
-// CREATE PV FROM DRAFT
+// POST /pvs/:id   (id = id_draft)  — reporter creates PV from draft
 exports.createPV = async (req, res) => {
-  const draft = await db.Draft.findOne({
-    where: { id_meeting: req.params.id },
-    include: [db.DraftPoint],
-  });
-
-  const pv = await db.Pv.create({
-    id_draft: draft.id_draft,
-    created_at: new Date(),
-    created_by: req.user.id_user,
-  });
-
-  const pvPoints = draft.DraftPoints.map((dp) => ({
-    id_pv: pv.id_pv,
-    content: dp.content,
-  }));
-
-  await db.PvPoint.bulkCreate(pvPoints);
-
-  res.json(pv);
-};
-
-exports.addPointToPv = async (req, res) => {
   try {
-    const { pvId } = req.params;
+    const draft = await Draft.findByPk(req.params.id, {
+      include: [{ model: DraftPoint }],
+    });
+    if (!draft) return res.status(404).json({ msg: "Draft not found." });
 
-    // 1. Find PV
-    const pv = await db.Pv.findByPk(pvId);
+    // Only one PV allowed per draft
+    const existing = await Pv.findOne({ where: { id_draft: draft.id_draft } });
+    if (existing) return res.status(409).json({ msg: "A PV already exists for this draft." });
 
-    if (!pv) {
-      return res.status(404).json({ msg: "PV not found" });
-    }
-
-    // 2. Get Draft
-    const draft = await db.Draft.findByPk(pv.id_draft);
-
-    if (!draft) {
-      return res.status(404).json({ msg: "Draft not found" });
-    }
-
-    // 3. Get Meeting
-    const meeting = await db.Meeting.findByPk(draft.id_meeting);
-
-    if (!meeting) {
-      return res.status(404).json({ msg: "Meeting not found" });
-    }
-
-    // 4. Check reporter
-    if (meeting.reporter_id !== req.user.id_user) {
-      return res.status(403).json({ msg: "Reporter only" });
-    }
-
-    // 5. Validate content
-    if (!req.body.content) {
-      return res.status(400).json({ msg: "Content is required" });
-    }
-
-    // 6. Create PV point
-    const point = await db.PvPoint.create({
-      id_pv: pv.id_pv,
-      content: req.body.content,
+    const pv = await Pv.create({
+      id_draft: draft.id_draft,
+      created_by: req.user.id,
+      created_at: new Date(),
     });
 
-    res.json(point);
+    // Copy all draft points into pv_points
+    if (draft.DraftPoints && draft.DraftPoints.length > 0) {
+      await PvPoint.bulkCreate(
+        draft.DraftPoints.map((dp) => ({
+          content: dp.content,
+          id_pv: pv.id_pv,
+        }))
+      );
+    }
 
+    const fullPv = await Pv.findByPk(pv.id_pv, { include: [{ model: PvPoint }] });
+    return res.status(201).json(fullPv);
   } catch (err) {
-    res.status(500).json(err.message);
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
   }
 };
 
+// POST /pvs/:pvId/point  — reporter adds an extra point to an existing PV
+// body: { content }
+exports.addPointToPv = async (req, res) => {
+  try {
+    const pv = await Pv.findByPk(req.params.pvId);
+    if (!pv) return res.status(404).json({ msg: "PV not found." });
+
+    // Only the reporter who created the PV can add points
+    if (Number(pv.created_by) !== Number(req.user.id))
+      return res.status(403).json({ msg: "Only the PV creator (reporter) can add points." });
+
+    const { content } = req.body;
+    if (!content || !content.trim())
+      return res.status(400).json({ msg: "content is required." });
+
+    const point = await PvPoint.create({ content: content.trim(), id_pv: pv.id_pv });
+    return res.status(201).json(point);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
+  }
+};
+
+// GET /pvs/meeting/:meetingId
 exports.getPvByMeeting = async (req, res) => {
   try {
-    const { meetingId } = req.params;
+    // Find the draft for the meeting, then the PV for that draft
+    const draft = await Draft.findOne({ where: { id_meeting: req.params.meetingId } });
+    if (!draft) return res.status(404).json({ msg: "No draft found for this meeting." });
 
-    // 1. Find draft
-    const draft = await db.Draft.findOne({
-      where: { id_meeting: meetingId },
-    });
-
-    if (!draft) {
-      return res.status(404).json({ msg: "Draft not found for this meeting" });
-    }
-
-    // 2. Find PV + include points
-    const pv = await db.Pv.findOne({
+    const pv = await Pv.findOne({
       where: { id_draft: draft.id_draft },
-      include: [
-        {
-          model: db.PvPoint,
-          attributes: ["id_pvpoint", "content"],
-        },
-      ],
+      include: [{ model: PvPoint, order: [["id_pvpoint", "ASC"]] }],
     });
+    if (!pv) return res.status(404).json({ msg: "No PV generated for this meeting yet." });
 
-    if (!pv) {
-      return res.status(404).json({ msg: "PV not found" });
-    }
-
-    res.json(pv);
-
+    return res.json(pv);
   } catch (err) {
-    res.status(500).json(err.message);
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
   }
 };

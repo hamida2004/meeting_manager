@@ -1,18 +1,9 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/draft.controller");
-const { auth, isMeetingMember, isReporter } = require("../middleware/auth.middleware");
+const { auth, isMeetingMember } = require("../middleware/auth.middleware");
 
-// get draft
-router.get("/:id", auth(), isMeetingMember, ctrl.createDraft);
-
-// edit draft
+router.get("/:id", auth(), isMeetingMember, ctrl.getDraft);        // FIXED: was createDraft
 router.post("/:id", auth(), isMeetingMember, ctrl.editDraft);
-
-router.get(
-  "/meeting/:meetingId",
-  auth(),
-  isMeetingMember, // recommended
-  ctrl.getDraftByMeeting
-);
+router.get("/meeting/:meetingId", auth(), isMeetingMember, ctrl.getDraftByMeeting);
 
 module.exports = router;

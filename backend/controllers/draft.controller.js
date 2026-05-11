@@ -1,88 +1,50 @@
-const db = require("../models");
+const { Vote, AgendaPoint, Meeting, MeetingMember } = require("../models");
 
-// CREATE DRAFT (reporter)
-exports.createDraft = async (req, res) => {
-  const draft = await db.Draft.findOne({
-    where: { id_meeting: req.params.id },
-  });
-
-  res.json(draft);
-};
-
-// EDIT DRAFT (members)
-exports.editDraft = async (req, res) => {
-  const t = await db.sequelize.transaction();
-
+// POST /votes/:id   (id = id_agenda_point)
+// body: { vote: "agree" | "disagree" | "abstain" }
+// middleware chain: auth() → isMeetingMember → canVote
+exports.vote = async (req, res) => {
   try {
-    const { id } = req.params;
+    const agendaPointId = req.params.id;
+    const { vote } = req.body;
 
-    // 1. Check draft exists
-    const draft = await db.Draft.findByPk(id, { transaction: t });
+    const validVotes = ["agree", "disagree", "abstain"];
+    if (!validVotes.includes(vote))
+      return res.status(400).json({ msg: `vote must be one of: ${validVotes.join(", ")}.` });
 
-    if (!draft) {
-      await t.rollback();
-      return res.status(404).json({ msg: "Draft not found" });
-    }
+    // Fetch the agenda point to check its meeting
+    const point = await AgendaPoint.findByPk(agendaPointId);
+    if (!point) return res.status(404).json({ msg: "Agenda point not found." });
 
-    // 2. Create draft point
-    const point = await db.DraftPoint.create(
-      {
-        id_draft: id,
-        content: req.body.content,
-        added_by: req.user.id_user,
-        added_at: new Date(),
-      },
-      { transaction: t }
-    );
+    // Check the meeting has voting open
+    const meeting = await Meeting.findByPk(point.meeting_id);
+    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
 
-    // 3. Update last_update_at
-    draft.last_update_at = new Date();
-    await draft.save({ transaction: t });
+    if (meeting.voting_state !== "open")
+      return res.status(403).json({ msg: "Voting is not open for this meeting." });
 
-    await t.commit();
+    if (point.state !== "confirmed")
+      return res.status(403).json({ msg: "This agenda point has not been confirmed for voting." });
 
-    res.json(point);
+    // Check for duplicate vote (also enforced by DB unique index)
+    const existing = await Vote.findOne({
+      where: { id_user: req.user.id, id_agenda_point: agendaPointId },
+    });
+    if (existing) return res.status(409).json({ msg: "You have already voted on this point." });
 
-  } catch (err) {
-    await t.rollback();
-    res.status(500).json(err.message);
-  }
-};
-
-exports.getDraftByMeeting = async (req, res) => {
-  try {
-    const { meetingId } = req.params;
-
-    // 1. Optional: check meeting exists
-    const meeting = await db.Meeting.findByPk(meetingId);
-    if (!meeting) {
-      return res.status(404).json({ msg: "Meeting not found" });
-    }
-
-    // 2. Get draft + points
-    const draft = await db.Draft.findOne({
-      where: { id_meeting: meetingId },
-      include: [
-        {
-          model: db.DraftPoint,
-          attributes: [
-            "id_point",
-            "content",
-            "added_at",
-            "edited_at",
-            "added_by",
-          ],
-        },
-      ],
+    const newVote = await Vote.create({
+      vote,
+      id_user: req.user.id,
+      id_agenda_point: agendaPointId,
+      vote_at: new Date(),
     });
 
-    if (!draft) {
-      return res.status(404).json({ msg: "Draft not found" });
-    }
-
-    res.json(draft);
-
+    return res.status(201).json({ msg: "Vote recorded.", vote: newVote });
   } catch (err) {
-    res.status(500).json(err.message);
+    // Handle DB-level unique constraint violation
+    if (err.name === "SequelizeUniqueConstraintError")
+      return res.status(409).json({ msg: "You have already voted on this point." });
+    console.error(err);
+    return res.status(500).json({ msg: "Server error." });
   }
 };
