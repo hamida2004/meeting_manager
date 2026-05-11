@@ -1,290 +1,167 @@
-const { Meeting, MeetingMember, User, Committee, AgendaPoint, Draft, Notification } = require("../models");
+const db = require("../models");
 
-// ─── helpers ───────────────────────────────────────────────────────────────
-
-const isCreator = (meeting, userId) =>
-  Number(meeting.creator_id) === Number(userId);
-
-// Send a notification to a list of user IDs
-const notify = async (userIds, content) => {
-  const rows = userIds.map((id) => ({ member_id: id, content, created_at: new Date() }));
-  await Notification.bulkCreate(rows).catch(() => {}); // non-blocking
-};
-
-// ─── CREATE ────────────────────────────────────────────────────────────────
-
-// POST /meetings
+// CREATE MEETING (creator = logged user)
 exports.createMeeting = async (req, res) => {
+  const t = await db.sequelize.transaction();
+
   try {
-    const { title, site, timing, meeting_type, committee_id } = req.body;
-    if (!title || !timing)
-      return res.status(400).json({ msg: "title and timing are required." });
-
-    const meeting = await Meeting.create({
-      title,
-      site: site || null,
-      timing,
-      meeting_type: meeting_type || "onsite",
-      status: "scheduled",
-      voting_state: "closed",
-      creator_id: req.user.id,
-      committee_id: committee_id || null,
-    });
-
-    // Add creator as a member automatically
-    await MeetingMember.create({
-      id_meeting: meeting.id_meeting,
-      id_user: req.user.id,
-      invited: true,
-      confirmed: true,
-      attended: false,
-    });
-
-    // Auto-create draft for this meeting
-    await Draft.create({ id_meeting: meeting.id_meeting, created_at: new Date(), last_update_at: new Date() });
-
-    return res.status(201).json(meeting);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// ─── READ ──────────────────────────────────────────────────────────────────
-
-// GET /meetings/member  — meetings where the logged user is a member
-exports.getMeetingsByMember = async (req, res) => {
-  try {
-    const memberships = await MeetingMember.findAll({
-      where: { id_user: req.user.id },
-      attributes: ["id_meeting"],
-    });
-    const ids = memberships.map((m) => m.id_meeting);
-
-    const meetings = await Meeting.findAll({
-      where: { id_meeting: ids },
-      include: [
-        { model: User, as: "creator", attributes: ["id_user", "full_name"] },
-        { model: User, as: "reporter", attributes: ["id_user", "full_name"] },
-      ],
-      order: [["timing", "DESC"]],
-    });
-
-    return res.json(meetings);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// GET /meetings  — all meetings (admin / general list)
-exports.getAllMeetings = async (req, res) => {
-  try {
-    const meetings = await Meeting.findAll({
-      include: [
-        { model: User, as: "creator", attributes: ["id_user", "full_name"] },
-        { model: User, as: "reporter", attributes: ["id_user", "full_name"] },
-      ],
-      order: [["timing", "DESC"]],
-    });
-    return res.json(meetings);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// GET /meetings/:id
-exports.getMeetingById = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id, {
-      include: [
-        { model: User, as: "creator", attributes: ["id_user", "full_name"] },
-        { model: User, as: "reporter", attributes: ["id_user", "full_name"] },
-        {
-          model: MeetingMember,
-          include: [{ model: User, attributes: ["id_user", "full_name", "email"] }],
-        },
-        {
-          model: AgendaPoint,
-          as: "AgendaPoints",
-        },
-      ],
-    });
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-    return res.json(meeting);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// ─── UPDATE ────────────────────────────────────────────────────────────────
-
-// PUT /meetings/:id  — isMeetingCreator middleware already checked
-exports.editMeeting = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-
-    const { title, site, timing, meeting_type } = req.body;
-    await meeting.update({
-      title: title ?? meeting.title,
-      site: site ?? meeting.site,
-      timing: timing ?? meeting.timing,
-      meeting_type: meeting_type ?? meeting.meeting_type,
-    });
-
-    return res.json(meeting);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// PATCH /meetings/:id/status
-exports.changeStatus = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-
-    const { status, voting_state } = req.body;
-
-    const validStatus = ["scheduled", "ongoing", "closed", "canceled"];
-    if (status && !validStatus.includes(status))
-      return res.status(400).json({ msg: `status must be one of: ${validStatus.join(", ")}.` });
-
-    await meeting.update({
-      status: status ?? meeting.status,
-      voting_state: voting_state ?? meeting.voting_state,
-    });
-
-    // Notify all members on status change
-    const members = await MeetingMember.findAll({ where: { id_meeting: meeting.id_meeting }, attributes: ["id_user"] });
-    const userIds = members.map((m) => m.id_user).filter((id) => Number(id) !== Number(req.user.id));
-    if (userIds.length)
-      await notify(userIds, `Meeting "${meeting.title}" status changed to ${meeting.status}.`);
-
-    return res.json(meeting);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// DELETE /meetings/:id
-exports.deleteMeeting = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-
-    await meeting.destroy();
-    return res.json({ msg: "Meeting deleted." });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
-};
-
-// ─── MEMBERS ───────────────────────────────────────────────────────────────
-
-// POST /meetings/:id/members  — body: { userIds: [1,2,3] }
-exports.addMembers = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
-
-    const { userIds } = req.body;
-    if (!Array.isArray(userIds) || userIds.length === 0)
-      return res.status(400).json({ msg: "userIds array is required." });
-
-    // Avoid duplicate inserts
-    const existing = await MeetingMember.findAll({
-      where: { id_meeting: meeting.id_meeting },
-      attributes: ["id_user"],
-    });
-    const existingIds = existing.map((m) => Number(m.id_user));
-    const toAdd = userIds.filter((id) => !existingIds.includes(Number(id)));
-
-    if (toAdd.length === 0)
-      return res.status(409).json({ msg: "All users are already members." });
-
-    await MeetingMember.bulkCreate(
-      toAdd.map((id) => ({
-        id_meeting: meeting.id_meeting,
-        id_user: id,
-        invited: true,
-        confirmed: false,
-        attended: false,
-      }))
+    // 🔹 1. create meeting
+    const meeting = await db.Meeting.create(
+      {
+        ...req.body,
+        creator_id: req.user.id_user,
+      },
+      { transaction: t }
     );
 
-    await notify(toAdd, `You have been invited to the meeting: "${meeting.title}".`);
+    // 🔹 2. auto create draft
+    await db.Draft.create(
+      {
+        id_meeting: meeting.id_meeting,
+        created_at: new Date(),
+      },
+      { transaction: t }
+    );
 
-    return res.status(201).json({ msg: `${toAdd.length} member(s) added.` });
+    // 🔹 3. add creator as meeting member
+    await db.MeetingMember.create(
+      {
+        id_meeting: meeting.id_meeting,
+        id_user: req.user.id_user,
+        invited: true,
+        confirmed: true,  // creator is automatically confirmed
+        attended: false,
+      },
+      { transaction: t }
+    );
+
+    await t.commit();
+
+    res.json({
+      msg: "Meeting created successfully",
+      meeting,
+    });
+
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
+    await t.rollback();
+    res.status(500).json(err.message);
   }
 };
 
-// POST /meetings/:id/reporter  — body: { reporterId }
+// GET MEETINGS BY MEMBER
+exports.getMeetingsByMember = async (req, res) => {
+  const meetings = await db.MeetingMember.findAll({
+    where: { id_user: req.user.id_user },
+    include: [db.Meeting],
+  });
+
+  res.json(meetings);
+};
+
+// ADD REPORTER
 exports.addReporter = async (req, res) => {
-  try {
-    const meeting = await Meeting.findByPk(req.params.id);
-    if (!meeting) return res.status(404).json({ msg: "Meeting not found." });
+  const meeting = await db.Meeting.findByPk(req.params.id);
 
-    const { reporterId } = req.body;
-    if (!reporterId) return res.status(400).json({ msg: "reporterId is required." });
+  meeting.reporter_id = req.body.reporter_id;
+  await meeting.save();
 
-    // Ensure reporter is a meeting member
-    const member = await MeetingMember.findOne({
-      where: { id_meeting: meeting.id_meeting, id_user: reporterId },
-    });
-    if (!member)
-      return res.status(400).json({ msg: "Reporter must be a member of the meeting." });
-
-    await meeting.update({ reporter_id: reporterId });
-    await notify([reporterId], `You have been assigned as reporter for "${meeting.title}".`);
-
-    return res.json({ msg: "Reporter assigned.", meeting });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
+  res.json(meeting);
 };
 
-// ─── ATTENDANCE ────────────────────────────────────────────────────────────
+// ADD MEMBERS
+exports.addMembers = async (req, res) => {
+  const members = req.body.members.map((id) => ({
+    id_meeting: req.params.id,
+    id_user: id,
+    invited: true,
+    confirmed: false,
+    attended: false,
+  }));
 
-// POST /meetings/:id/confirm  — member self-confirms attendance
+  await db.MeetingMember.bulkCreate(members);
+
+  res.json({ msg: "Members added" });
+};
+
+// EDIT MEETING
+exports.editMeeting = async (req, res) => {
+  const meeting = await db.Meeting.findByPk(req.params.id);
+
+  await meeting.update(req.body);
+
+  res.json(meeting);
+};
+
+// CHANGE STATUS
+exports.changeStatus = async (req, res) => {
+  const meeting = await db.Meeting.findByPk(req.params.id);
+
+  meeting.status = req.body.status;
+  await meeting.save();
+
+  res.json(meeting);
+};
+
+// MEMBER CONFIRM ATTENDANCE
 exports.confirmAttendance = async (req, res) => {
-  try {
-    const member = await MeetingMember.findOne({
-      where: { id_meeting: req.params.id, id_user: req.user.id },
-    });
-    if (!member) return res.status(404).json({ msg: "You are not a member of this meeting." });
+  const mm = await db.MeetingMember.findOne({
+    where: {
+      id_meeting: req.params.id,
+      id_user: req.user.id_user,
+    },
+  });
 
-    await member.update({ confirmed: true });
-    return res.json({ msg: "Attendance confirmed." });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
-  }
+  mm.confirmed = true;
+  await mm.save();
+
+  res.json(mm);
 };
 
-// POST /meetings/:id/attendance/:memberId  — creator validates a member's attendance
+// CREATOR VALIDATES ATTENDANCE
 exports.validateAttendance = async (req, res) => {
   try {
-    const { id, memberId } = req.params;
-    const member = await MeetingMember.findOne({
-      where: { id_meeting: id, id_user: memberId },
-    });
-    if (!member) return res.status(404).json({ msg: "Member not found in this meeting." });
+    const { id, memberId } = req.params; // id = meeting_id
 
-    await member.update({ attended: true });
-    return res.json({ msg: "Attendance validated." });
+    // 🔹 1. check meeting exists
+    const meeting = await db.Meeting.findByPk(id);
+    if (!meeting) {
+      return res.status(404).json({ msg: "Meeting not found" });
+    }
+
+    // 🔹 2. check creator permission
+    if (meeting.creator_id !== req.user.id_user) {
+      return res.status(403).json({ msg: "Only creator can validate attendance" });
+    }
+
+    // 🔹 3. check membership
+    const mm = await db.MeetingMember.findOne({
+      where: {
+        id_meeting: id,
+        id_user: memberId,
+      },
+    });
+
+    if (!mm) {
+      return res.status(404).json({ msg: "Member not part of this meeting" });
+    }
+
+    // 🔹 4. ensure member confirmed first
+    if (!mm.confirmed) {
+      return res.status(400).json({
+        msg: "Member must confirm attendance first",
+      });
+    }
+
+    // 🔹 5. update attendance
+    mm.attended = true;
+    await mm.save();
+
+    res.json({
+      msg: "Attendance validated",
+      member: mm,
+    });
+
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error." });
+    res.status(500).json(err.message);
   }
 };
