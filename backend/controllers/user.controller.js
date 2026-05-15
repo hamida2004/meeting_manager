@@ -1,63 +1,250 @@
 const db = require("../models");
 
-exports.getUsers = async (req, res) => {
-  const users = await db.User.findAll();
-  res.json(users);
-};
-
-exports.getUser = async (req, res) => {
-  const user = await db.User.findByPk(req.params.id);
-  res.json(user);
-};
-
-exports.updateUser = async (req, res) => {
-  const user = await db.User.findByPk(req.params.id);
-
-  await user.update(req.body);
-
-  res.json(user);
-};
-
-exports.deleteUser = async (req, res) => {
-  await db.User.destroy({
-    where: { id_user: req.params.id },
-  });
-
-  res.json({ msg: "Deleted" });
-};
-
-exports.getRoles = async (req, res) => {
+// =====================================================
+// GET ALL USERS
+// =====================================================
+exports.getUsers = async (
+  req,
+  res
+) => {
   try {
-    const roles = await db.Role.findAll();
-    res.json(roles);
-  } catch (e) {
-    res.status(500).json(e.message);
+    const users =
+      await db.User.findAll({
+        attributes: [
+          "id_user",
+          "full_name",
+          "email",
+          "is_admin",
+          "createdAt",
+          "updatedAt",
+        ],
+      });
+
+    return res.json(users);
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
   }
 };
 
-exports.switchAdmin = async (req, res) => {
+// =====================================================
+// GET ONE USER
+// =====================================================
+exports.getUser = async (
+  req,
+  res
+) => {
   try {
-    const { user_id } = req.body;
-
-    const user = await db.User.findByPk(user_id);
+    const user =
+      await db.User.findByPk(
+        req.params.id,
+        {
+          attributes: [
+            "id_user",
+            "full_name",
+            "email",
+            "is_admin",
+            "createdAt",
+            "updatedAt",
+          ],
+        }
+      );
 
     if (!user) {
-      return res.status(404).json({ msg: "User not found" });
+      return res.status(404).json({
+        msg: "User not found",
+      });
     }
 
-    user.is_admin = !user.is_admin;
+    return res.json(user);
 
-    await user.save();
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
 
-    res.json({
-      msg: "Admin status toggled",
+// =====================================================
+// UPDATE USER
+// =====================================================
+exports.updateUser = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      await db.User.findByPk(
+        req.params.id
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+
+    // only self or admin
+    if (
+      req.user.id_user !==
+        user.id_user &&
+      !req.user.is_admin
+    ) {
+      return res.status(403).json({
+        msg: "Not allowed",
+      });
+    }
+
+    // prevent admin escalation
+    delete req.body.is_admin;
+
+    await user.update({
+      full_name:
+        req.body.full_name ||
+        user.full_name,
+
+      email:
+        req.body.email ||
+        user.email,
+    });
+
+    return res.json({
+      msg: "User updated",
       user: {
-        id_user: user.id_user,
-        is_admin: user.is_admin,
+        id_user:
+          user.id_user,
+
+        full_name:
+          user.full_name,
+
+        email:
+          user.email,
+
+        is_admin:
+          user.is_admin,
       },
     });
 
   } catch (err) {
-    res.status(500).json(err.message);
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// DELETE USER
+// =====================================================
+exports.deleteUser = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      await db.User.findByPk(
+        req.params.id
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+
+    // prevent deleting yourself
+    if (
+      user.id_user ===
+      req.user.id_user
+    ) {
+      return res.status(400).json({
+        msg:
+          "Cannot delete your own account",
+      });
+    }
+
+    await user.destroy();
+
+    return res.json({
+      msg: "User deleted",
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// TOGGLE ADMIN
+// =====================================================
+exports.switchAdmin = async (
+  req,
+  res
+) => {
+  try {
+    const { user_id } =
+      req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        msg:
+          "user_id required",
+      });
+    }
+
+    const user =
+      await db.User.findByPk(
+        user_id
+      );
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+
+    // prevent self-demotion
+    if (
+      user.id_user ===
+        req.user.id_user &&
+      user.is_admin
+    ) {
+      return res.status(400).json({
+        msg:
+          "Cannot remove your own admin access",
+      });
+    }
+
+    user.is_admin =
+      !user.is_admin;
+
+    await user.save();
+
+    return res.json({
+      msg:
+        "Admin status updated",
+
+      user: {
+        id_user:
+          user.id_user,
+
+        full_name:
+          user.full_name,
+
+        email:
+          user.email,
+
+        is_admin:
+          user.is_admin,
+      },
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
   }
 };

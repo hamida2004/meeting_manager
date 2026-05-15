@@ -2,14 +2,12 @@ module.exports = (sequelize, DataTypes) => {
   return sequelize.define(
     "Notification",
     {
-      id_notification: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      content: DataTypes.TEXT,
-      created_at: DataTypes.DATE,
-      member_id: DataTypes.BIGINT,
+      id_notif:   { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      id_user:    { type: DataTypes.BIGINT, allowNull: false },
+      content:    { type: DataTypes.TEXT, allowNull: false },
+      is_read:    { type: DataTypes.BOOLEAN, defaultValue: false },
+      created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     },
-    {
-      tableName: "notifications",
-      timestamps: false,
-    }
+    { tableName: "notifications", timestamps: true }
   );
 };

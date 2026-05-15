@@ -1,16 +1,34 @@
 const router = require("express").Router();
-const ctrl = require("../controllers/pv.controller");
-const { auth, isReporter, isMeetingMember } = require("../middleware/auth.middleware");
 
-// create pv from draft
-router.post("/:id", auth(), isReporter, ctrl.createPV);
+const controller = require(
+  "../controllers/pv.controller"
+);
 
-// add point to pv
-router.post("/:pvId/point", auth(), isReporter, ctrl.addPointToPv);
+const {
+  auth,
+} = require(
+  "../middlewares/auth.middleware"
+);
+
+// CREATE PV
+router.post(
+  "/meeting/:meetingId",
+  auth(),
+  controller.createPV
+);
+
+// GET PV
 router.get(
   "/meeting/:meetingId",
   auth(),
-  isMeetingMember, // optional but recommended
-  ctrl.getPvByMeeting
+  controller.getPvByMeeting
 );
+
+// ADD POINT
+router.post(
+  "/:pvId/points",
+  auth(),
+  controller.addPointToPv
+);
+
 module.exports = router;

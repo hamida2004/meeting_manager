@@ -1,208 +1,476 @@
 const db = require("../models");
 
-// CREATE COMMITTEE (admin)
+// =====================================================
+// CREATE COMMITTEE
+// =====================================================
 exports.createCommittee = async (req, res) => {
+  const t = await db.sequelize.transaction();
+
   try {
-    const { name, president_id } = req.body;
-
-    if (!president_id) {
-      return res.status(400).json({ msg: "President required" });
-    }
-
-    const committee = await db.Committee.create({
+    const {
       name,
       president_id,
-    });
+    } = req.body;
 
-    // ✅ FIXED FIELD NAME
-    await db.CommitteeMember.create({
-      id_user: president_id,
-      committee_id: committee.id_committee,
-      role_id: 2, // president
-    });
+    if (!name || !president_id) {
+      await t.rollback();
 
-    res.json(committee);
-
-  } catch (err) {
-    res.status(500).json(err.message);
-  }
-};
-
-
-// ADD MEMBERS
-exports.addMembers = async (req, res) => {
-  const members = req.body.members.map((m) => ({
-    id_user: m.user,
-    committee_id: req.params.id, // ✅ FIXED
-    role_id: 3,
-  }));
-
-  await db.CommitteeMember.bulkCreate(members);
-
-  res.json({ msg: "Members added" });
-};
-
-// REMOVE MEMBER
-exports.removeMember = async (req, res) => {
-  try {
-    const { id } = req.params; // committee_id
-    const { id_user } = req.body;
-
-    // 🔹 1. check committee exists
-    const committee = await db.Committee.findByPk(id);
-    if (!committee) {
-      return res.status(404).json({ msg: "Committee not found" });
-    }
-
-    // 🔹 2. prevent removing president
-    if (committee.president_id === id_user) {
       return res.status(400).json({
-        msg: "Cannot remove president. Assign a new one first.",
+        msg: "Name and president are required",
       });
     }
 
-    // 🔹 3. check membership exists
-    const membership = await db.CommitteeMember.findOne({
-      where: {
-        id_user,
-        committee_id: id,
+    // check president exists
+    const president =
+      await db.User.findByPk(
+        president_id,
+        { transaction: t }
+      );
+
+    if (!president) {
+      await t.rollback();
+
+      return res.status(404).json({
+        msg: "President not found",
+      });
+    }
+
+    // create committee
+    const committee =
+      await db.Committee.create(
+        {
+          name,
+          president_id,
+        },
+        { transaction: t }
+      );
+
+    // auto-add president
+    await db.CommitteeMember.create(
+      {
+        committee_id:
+          committee.id_committee,
+
+        id_user: president_id,
       },
+      { transaction: t }
+    );
+
+    await t.commit();
+
+    return res.status(201).json({
+      msg: "Committee created",
+      committee,
     });
+
+  } catch (err) {
+    await t.rollback();
+
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// ADD MEMBERS
+// =====================================================
+exports.addMembers = async (req, res) => {
+  try {
+    const { members } = req.body;
+
+    const committee =
+      await db.Committee.findByPk(
+        req.params.id
+      );
+
+    if (!committee) {
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
+    }
+
+    if (
+      !Array.isArray(members) ||
+      members.length === 0
+    ) {
+      return res.status(400).json({
+        msg: "Members array required",
+      });
+    }
+
+    // verify all users exist
+    const users =
+      await db.User.findAll({
+        where: {
+          id_user: members,
+        },
+      });
+
+    if (
+      users.length !== members.length
+    ) {
+      return res.status(400).json({
+        msg: "Some users not found",
+      });
+    }
+
+    const data = members.map(
+      (userId) => ({
+        committee_id:
+          committee.id_committee,
+
+        id_user: userId,
+      })
+    );
+
+    await db.CommitteeMember.bulkCreate(
+      data,
+      {
+        ignoreDuplicates: true,
+      }
+    );
+
+    return res.json({
+      msg: "Members added",
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// REMOVE MEMBER
+// =====================================================
+exports.removeMember = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id,
+      userId,
+    } = req.params;
+
+    const committee =
+      await db.Committee.findByPk(id);
+
+    if (!committee) {
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
+    }
+
+    // cannot remove president
+    if (
+      committee.president_id ==
+      userId
+    ) {
+      return res.status(400).json({
+        msg:
+          "Cannot remove president. Transfer presidency first.",
+      });
+    }
+
+    const membership =
+      await db.CommitteeMember.findOne({
+        where: {
+          committee_id: id,
+          id_user: userId,
+        },
+      });
 
     if (!membership) {
-      return res.status(404).json({ msg: "Member not found in committee" });
+      return res.status(404).json({
+        msg: "Member not found",
+      });
     }
 
-    // 🔹 4. remove member
     await membership.destroy();
 
-    // 🔹 5. count remaining members
-    const remaining = await db.CommitteeMember.count({
-      where: { committee_id: id },
-    });
-
-    // 🔹 6. delete committee if empty
-    if (remaining === 0) {
-      await db.Committee.destroy({
-        where: { id_committee: id },
-      });
-
-      return res.json({
-        msg: "Member removed and committee deleted (no members left)",
-      });
-    }
-
-    // 🔹 7. success
-    res.json({
+    return res.json({
       msg: "Member removed",
-      remaining_members: remaining,
     });
 
   } catch (err) {
-    res.status(500).json(err.message);
-  }
-};
-
-// SWITCH ROLE
-exports.switchRole = async (req, res) => {
-  try {
-    const { user_id, role_id } = req.body;
-
-    const cm = await db.CommitteeMember.findOne({
-      where: {
-        id_user: user_id,
-        committee_id: req.params.id,
-      },
+    return res.status(500).json({
+      msg: err.message,
     });
-
-    if (!cm) {
-      return res.status(404).json({ msg: "Membership not found" });
-    }
-
-    cm.role_id = role_id;
-    await cm.save();
-
-    res.json(cm);
-
-  } catch (err) {
-    res.status(500).json(err.message);
   }
 };
 
-// GET COMMITTEE BY MEMBER
-exports.getCommitteeByMember = async (req, res) => {
+// =====================================================
+// CHANGE PRESIDENT
+// =====================================================
+exports.changePresident = async (
+  req,
+  res
+) => {
   try {
-    const memberships = await db.CommitteeMember.findAll({
-      where: { id_user: req.user.id_user },
-      include: [
-        {
-          model: db.Committee,
-          attributes: ["id_committee", "name", "president_id"],
-        },
-      ],
-    });
-
-    // remove nulls + flatten
-    const committees = memberships
-      .filter(m => m.Committee !== null)
-      .map(m => ({
-        id_committee: m.Committee.id_committee,
-        name: m.Committee.name,
-        president_id: m.Committee.president_id,
-        role_id: m.role_id,
-      }));
-
-    res.json(committees);
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-exports.getAllCommittees = async (req, res) => {
-  try {
-    const committees = await db.Committee.findAll();
-    res.json(committees);
-  } catch (err) {
-    res.status(500).json(err.message);
-  }
-};
-
-exports.getCommittee = async (req, res) => {
-  try {
-    const committee = await db.Committee.findByPk(req.params.id, {
-      include: [
-        {
-          model: db.CommitteeMember,
-          include: [db.User],
-        },
-      ],
-    });
+    const committee =
+      await db.Committee.findByPk(
+        req.params.id
+      );
 
     if (!committee) {
-      return res.status(404).json({ msg: "Not found" });
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
     }
 
-    res.json(committee);
+    // only current president
+    if (
+      committee.president_id !==
+      req.user.id_user
+    ) {
+      return res.status(403).json({
+        msg:
+          "Only current president can transfer presidency",
+      });
+    }
+
+    const {
+      new_president_id,
+    } = req.body;
+
+    if (!new_president_id) {
+      return res.status(400).json({
+        msg:
+          "new_president_id required",
+      });
+    }
+
+    // must already belong to committee
+    const membership =
+      await db.CommitteeMember.findOne({
+        where: {
+          committee_id:
+            committee.id_committee,
+
+          id_user:
+            new_president_id,
+        },
+      });
+
+    if (!membership) {
+      return res.status(400).json({
+        msg:
+          "New president must belong to committee",
+      });
+    }
+
+    committee.president_id =
+      new_president_id;
+
+    await committee.save();
+
+    return res.json({
+      msg:
+        "President changed successfully",
+
+      committee,
+    });
 
   } catch (err) {
-    res.status(500).json(err.message);
+    return res.status(500).json({
+      msg: err.message,
+    });
   }
 };
 
-exports.updateCommittee = async (req, res) => {
+// =====================================================
+// GET ALL COMMITTEES
+// =====================================================
+exports.getAllCommittees =
+  async (req, res) => {
+    try {
+      const committees =
+        await db.Committee.findAll({
+          include: [
+            {
+              model: db.User,
+              as: "president",
+              attributes: [
+                "id_user",
+                "full_name",
+                "email",
+              ],
+            },
+          ],
+        });
+
+      return res.json(committees);
+
+    } catch (err) {
+      return res.status(500).json({
+        msg: err.message,
+      });
+    }
+  };
+
+// =====================================================
+// GET ONE COMMITTEE
+// =====================================================
+exports.getCommittee = async (
+  req,
+  res
+) => {
   try {
-    const committee = await db.Committee.findByPk(req.params.id);
+    const committee =
+      await db.Committee.findByPk(
+        req.params.id,
+        {
+          include: [
+            {
+              model:
+                db.CommitteeMember,
+              as: "members",
+
+              include: [
+                {
+                  model: db.User,
+                  as: "user",
+
+                  attributes: [
+                    "id_user",
+                    "full_name",
+                    "email",
+                    "is_admin",
+                  ],
+                },
+              ],
+            },
+
+            {
+              model: db.User,
+              as: "president",
+
+              attributes: [
+                "id_user",
+                "full_name",
+                "email",
+              ],
+            },
+          ],
+        }
+      );
 
     if (!committee) {
-      return res.status(404).json({ msg: "Not found" });
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
     }
 
-    await committee.update(req.body);
-
-    res.json(committee);
+    return res.json(committee);
 
   } catch (err) {
-    res.status(500).json(err.message);
+    return res.status(500).json({
+      msg: err.message,
+    });
   }
 };
+
+// =====================================================
+// UPDATE COMMITTEE
+// =====================================================
+exports.updateCommittee = async (
+  req,
+  res
+) => {
+  try {
+    const committee =
+      await db.Committee.findByPk(
+        req.params.id
+      );
+
+    if (!committee) {
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
+    }
+
+    await committee.update({
+      name:
+        req.body.name ||
+        committee.name,
+    });
+
+    return res.json({
+      msg: "Committee updated",
+      committee,
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// DELETE COMMITTEE
+// =====================================================
+exports.deleteCommittee = async (
+  req,
+  res
+) => {
+  try {
+    const committee =
+      await db.Committee.findByPk(
+        req.params.id
+      );
+
+    if (!committee) {
+      return res.status(404).json({
+        msg: "Committee not found",
+      });
+    }
+
+    await committee.destroy();
+
+    return res.json({
+      msg: "Committee deleted",
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
+
+// =====================================================
+// GET MY COMMITTEES
+// =====================================================
+exports.getMyCommittees =
+  async (req, res) => {
+    try {
+      const memberships =
+        await db.CommitteeMember.findAll({
+          where: {
+            id_user:
+              req.user.id_user,
+          },
+
+          include: [
+            {
+              model: db.Committee,
+            },
+          ],
+        });
+
+      return res.json(
+        memberships.map(
+          (m) => m.Committee
+        )
+      );
+
+    } catch (err) {
+      return res.status(500).json({
+        msg: err.message,
+      });
+    }
+  };

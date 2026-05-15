@@ -1,15 +1,13 @@
+// draft.model.js
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define(
     "Draft",
     {
-      id_draft: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      created_at: DataTypes.DATE,
-      last_update_at: DataTypes.DATE,
-      id_meeting: { type: DataTypes.BIGINT, unique: true },
+      id_draft:       { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      id_meeting:     { type: DataTypes.BIGINT, allowNull: false, unique: true },
+      created_at:     { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+      last_updated_at:{ type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     },
-    {
-      tableName: "drafts",
-      timestamps: false,
-    }
+    { tableName: "drafts", timestamps: true }
   );
 };

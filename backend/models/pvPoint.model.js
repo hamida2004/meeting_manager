@@ -3,12 +3,9 @@ module.exports = (sequelize, DataTypes) => {
     "PvPoint",
     {
       id_pvpoint: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      content: DataTypes.TEXT,
-      id_pv: DataTypes.BIGINT,
+      id_pv:      { type: DataTypes.BIGINT, allowNull: false },
+      content:    { type: DataTypes.TEXT, allowNull: false },
     },
-    {
-      tableName: "pv_points",
-      timestamps: false,
-    }
+    { tableName: "pv_points", timestamps: true }
   );
 };

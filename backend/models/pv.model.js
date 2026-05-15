@@ -1,15 +1,13 @@
+// pv.model.js
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define(
     "Pv",
     {
-      id_pv: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      created_at: DataTypes.DATE,
-      created_by: DataTypes.BIGINT,
-      id_draft: DataTypes.BIGINT,
+      id_pv:      { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      id_draft:   { type: DataTypes.BIGINT, allowNull: false, unique: true },
+      created_by: { type: DataTypes.BIGINT, allowNull: false },
+      created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     },
-    {
-      tableName: "pvs",
-      timestamps: false,
-    }
+    { tableName: "pvs", timestamps: true }
   );
 };

@@ -1,38 +1,88 @@
 const router = require("express").Router();
-const ctrl = require("../controllers/meeting.controller");
+
+const controller = require(
+  "../controllers/meeting.controller"
+);
+
 const {
   auth,
   isMeetingCreator,
-  isMeetingMember,
-} = require("../middleware/auth.middleware");
+} = require(
+  "../middlewares/auth.middleware"
+);
 
-// create meeting
-router.post("/", auth(), ctrl.createMeeting);
+// GET
+router.get(
+  "/mine",
+  auth(),
+  controller.getMeetingsByMember
+);
 
-// meetings of logged user
-router.get("/member", auth(), ctrl.getMeetingsByMember);
+router.get(
+  "/grouped",
+  auth(),
+  controller.getMeetingsGroupedByCommittee
+);
 
-// add reporter
-router.post("/:id/reporter", auth(), isMeetingCreator, ctrl.addReporter);
-
-// add members
-router.post("/:id/members", auth(), isMeetingCreator, ctrl.addMembers);
-
-// edit meeting
-router.put("/:id", auth(), isMeetingCreator, ctrl.editMeeting);
-
-// change status
-router.patch("/:id/status", auth(), isMeetingCreator, ctrl.changeStatus);
-
-// member confirms attendance
-router.post("/:id/confirm", auth(), isMeetingMember, ctrl.confirmAttendance);
-
-// creator validates attendance
+// CREATE
 router.post(
+  "/",
+  auth(),
+  controller.createMeeting
+);
+
+// UPDATE
+router.patch(
+  "/:id",
+  auth(),
+  isMeetingCreator,
+  controller.editMeeting
+);
+
+// DELETE
+router.delete(
+  "/:id",
+  auth(),
+  isMeetingCreator,
+  controller.deleteMeeting
+);
+
+// STATUS
+router.patch(
+  "/:id/status",
+  auth(),
+  isMeetingCreator,
+  controller.changeStatus
+);
+
+// REPORTER
+router.patch(
+  "/:id/reporter",
+  auth(),
+  isMeetingCreator,
+  controller.addReporter
+);
+
+// MEMBERS
+router.post(
+  "/:id/members",
+  auth(),
+  isMeetingCreator,
+  controller.addMembers
+);
+
+// ATTENDANCE
+router.patch(
+  "/:id/confirm-attendance",
+  auth(),
+  controller.confirmAttendance
+);
+
+router.patch(
   "/:id/attendance/:memberId",
   auth(),
   isMeetingCreator,
-  ctrl.validateAttendance
+  controller.validateAttendance
 );
 
 module.exports = router;

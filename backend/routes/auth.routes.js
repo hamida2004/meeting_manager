@@ -1,15 +1,47 @@
 const router = require("express").Router();
-const ctrl = require("../controllers/auth.controller");
-const { auth } = require("../middleware/auth.middleware");
 
-router.post("/register", ctrl.register);
-router.post("/login", ctrl.login);
+const controller = require(
+  "../controllers/auth.controller"
+);
 
-router.get("/me", auth(), ctrl.me);
-router.post("/logout", auth(), ctrl.logout);
+const {
+  auth,
+} = require(
+  "../middlewares/auth.middleware"
+);
 
-// password reset
-router.post("/request-reset", ctrl.requestReset);
-router.post("/reset-password", ctrl.resetPassword);
+// PUBLIC
+router.post(
+  "/register",
+  controller.register
+);
+
+router.post(
+  "/login",
+  controller.login
+);
+
+router.post(
+  "/forgot-password",
+  controller.requestReset
+);
+
+router.post(
+  "/reset-password",
+  controller.resetPassword
+);
+
+// PRIVATE
+router.get(
+  "/me",
+  auth(),
+  controller.me
+);
+
+router.post(
+  "/logout",
+  auth(),
+  controller.logout
+);
 
 module.exports = router;

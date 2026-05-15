@@ -2,20 +2,17 @@ module.exports = (sequelize, DataTypes) => {
   return sequelize.define(
     "Meeting",
     {
-      id_meeting: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      title: DataTypes.STRING,
-      site: DataTypes.STRING,
-      timing: DataTypes.DATE,
-      status: DataTypes.ENUM("scheduled", "ongoing", "closed","canceled"),
-      reporter_id: DataTypes.BIGINT,
-      creator_id: DataTypes.BIGINT,
-      voting_state: DataTypes.ENUM("open", "closed"),
-      meeting_type: DataTypes.ENUM("online","onsite"),
-      committee_id:DataTypes.BIGINT
+      id_meeting:   { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      title:        { type: DataTypes.STRING(200), allowNull: false },
+      site:         { type: DataTypes.STRING(200), allowNull: true },
+      timing:       { type: DataTypes.DATE, allowNull: false },
+      meeting_type: { type: DataTypes.ENUM("online", "onsite"), defaultValue: "onsite" },
+      status:       { type: DataTypes.ENUM("scheduled", "ongoing", "closed", "canceled"), defaultValue: "scheduled" },
+      voting_state: { type: DataTypes.ENUM("open", "closed"), defaultValue: "closed" },
+      committee_id: { type: DataTypes.BIGINT, allowNull: true },
+      creator_id:   { type: DataTypes.BIGINT, allowNull: false },
+      reporter_id:  { type: DataTypes.BIGINT, allowNull: true },
     },
-    {
-      tableName: "meetings",
-      timestamps: false,
-    }
+    { tableName: "meetings", timestamps: true }
   );
 };

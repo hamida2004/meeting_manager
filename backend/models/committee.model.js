@@ -3,12 +3,9 @@ module.exports = (sequelize, DataTypes) => {
     "Committee",
     {
       id_committee: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      name: DataTypes.STRING,
-      president_id: DataTypes.BIGINT,
+      name:         { type: DataTypes.STRING(150), allowNull: false },
+      president_id: { type: DataTypes.BIGINT, allowNull: false }, // FK → users.id_user
     },
-    {
-      tableName: "committees",
-      timestamps: false,
-    }
+    { tableName: "committees", timestamps: true }
   );
 };

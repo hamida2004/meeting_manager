@@ -1,28 +1,63 @@
 const router = require("express").Router();
-const ctrl = require("../controllers/agenda.controller");
+
+const controller = require(
+  "../controllers/agenda.controller"
+);
+
 const {
   auth,
   isMeetingCreator,
-  isMeetingMember,
-} = require("../middleware/auth.middleware");
-
-// get agenda
-router.get("/:meetingId", auth(), ctrl.getAgendaByMeeting);
-
-// add point
-router.post(
-  "/:meetingId/point",
-  auth(),
-  isMeetingMember,
-  ctrl.addPointToAgenda
+} = require(
+  "../middlewares/auth.middleware"
 );
 
-// confirm agenda (creator only)
-router.patch(
-  "/point/:id/confirm",
+// GET AGENDA
+router.get(
+  "/meeting/:meetingId",
   auth(),
-  isMeetingCreator,
-  ctrl.confirmAgenda
+  controller.getAgendaByMeeting
+);
+
+// ADD POINT
+router.post(
+  "/meeting/:meetingId/points",
+  auth(),
+  controller.addPointToAgenda
+);
+
+// APPROVE
+router.patch(
+  "/points/:id/approve",
+  auth(),
+  controller.approveAgendaPoint
+);
+
+// REJECT
+router.patch(
+  "/points/:id/reject",
+  auth(),
+  controller.rejectAgendaPoint
+);
+
+// OPEN VOTING
+router.patch(
+  "/points/:id/open",
+  auth(),
+  controller.openVoting
+);
+
+// CLOSE VOTING
+router.patch(
+  "/points/:id/close",
+  auth(),
+  controller.closeVoting
+);
+
+// DELETE POINT
+router.delete(
+  "/points/:id",
+  auth(),
+  controller.deleteAgendaPoint
 );
 
 module.exports = router;

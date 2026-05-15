@@ -1,50 +1,79 @@
-// routes/committee.routes.js
 const router = require("express").Router();
 
-const ctrl = require("../controllers/committee.controller");
+const controller = require(
+  "../controllers/committee.controller"
+);
+
 const {
   auth,
   isAdmin,
   isPresident,
-} = require("../middleware/auth.middleware");
+} = require(
+  "../middlewares/auth.middleware"
+);
 
-
-// =========================
-// CREATE (ADMIN)
-// =========================
-router.post("/", auth(), isAdmin, ctrl.createCommittee);
-
-
-// =========================
 // GET
-// =========================
+router.get(
+  "/",
+  auth(),
+  controller.getAllCommittees
+);
 
-// get all committees (admin or debug)
-router.get("/", auth(), ctrl.getAllCommittees);
+router.get(
+  "/mine",
+  auth(),
+  controller.getMyCommittees
+);
 
-// get my committees
-router.get("/member", auth(), ctrl.getCommitteeByMember);
+router.get(
+  "/:id",
+  auth(),
+  controller.getCommittee
+);
 
-// get one committee
-router.get("/:id", auth(), ctrl.getCommittee);
+// CREATE
+router.post(
+  "/",
+  auth(),
+  isAdmin,
+  controller.createCommittee
+);
 
+// UPDATE
+router.patch(
+  "/:id",
+  auth(),
+  isAdmin,
+  controller.updateCommittee
+);
 
-// =========================
-// UPDATE (PRESIDENT)
-// =========================
-router.put("/:id", auth(), isPresident, ctrl.updateCommittee);
+// DELETE
+router.delete(
+  "/:id",
+  auth(),
+  isAdmin,
+  controller.deleteCommittee
+);
 
+// MEMBERS
+router.post(
+  "/:id/members",
+  auth(),
+  controller.addMembers
+);
 
+router.delete(
+  "/:id/members/:userId",
+  auth(),
+  controller.removeMember
+);
 
-
-// add members (president)
-router.post("/:id/members", auth(), isPresident, ctrl.addMembers);
-
-// remove member (president)
-router.delete("/:id/member", auth(), isPresident, ctrl.removeMember);
-
-// switch role (president)
-router.patch("/:id/role", auth(), isPresident, ctrl.switchRole);
-
+// PRESIDENT
+router.patch(
+  "/:id/change-president",
+  auth(),
+  isPresident,
+  controller.changePresident
+);
 
 module.exports = router;

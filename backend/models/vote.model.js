@@ -2,21 +2,16 @@ module.exports = (sequelize, DataTypes) => {
   return sequelize.define(
     "Vote",
     {
-      id_vote: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-      vote: DataTypes.ENUM("agree", "disagree", "abstain"),
-      id_user: DataTypes.BIGINT,
-      id_agenda_point: DataTypes.BIGINT,
-      vote_at: DataTypes.DATE,
+      id_vote:         { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      id_point:        { type: DataTypes.BIGINT, allowNull: false },
+      id_user:         { type: DataTypes.BIGINT, allowNull: false },
+      vote:            { type: DataTypes.ENUM("agree", "disagree", "abstain"), allowNull: false },
+      voted_at:        { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     },
     {
       tableName: "votes",
-      timestamps: false,
-      indexes: [
-        {
-          unique: true,
-          fields: ["id_user", "id_agenda_point"],
-        },
-      ],
+      timestamps: true,
+      indexes: [{ unique: true, fields: ["id_point", "id_user"] }],
     }
   );
 };
