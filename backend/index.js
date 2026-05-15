@@ -289,17 +289,17 @@ app.get(
   "/dev/clear-db",
   async (req, res) => {
     try {
-      // if (
-      //   process.env.NODE_ENV ===
-      //   "production"
-      // ) {
-      //   return res
-      //     .status(403)
-      //     .json({
-      //       msg:
-      //         "Disabled in production",
-      //     });
-      // }
+      if (
+        process.env.NODE_ENV ===
+        "production"
+      ) {
+        return res
+          .status(403)
+          .json({
+            msg:
+              "Disabled in production",
+          });
+      }
 
       await db.sequelize.query(
         "SET FOREIGN_KEY_CHECKS = 0"
