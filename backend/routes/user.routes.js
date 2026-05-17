@@ -25,6 +25,12 @@ router.get(
   controller.getUser
 );
 
+router.patch(
+  "/toggle-admin",
+  auth(),
+  isAdmin,
+  controller.switchAdmin
+);
 // UPDATE
 router.patch(
   "/:id",
@@ -41,11 +47,6 @@ router.delete(
 );
 
 // TOGGLE ADMIN
-router.patch(
-  "/toggle-admin",
-  auth(),
-  isAdmin,
-  controller.switchAdmin
-);
+
 
 module.exports = router;

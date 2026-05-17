@@ -54,7 +54,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // prevent duplicates
+    // prevent duplicate emails
     const exists =
       await User.findOne({
         where: { email },
@@ -66,23 +66,46 @@ exports.register = async (req, res) => {
       });
     }
 
+    // hash password
     const hash =
       await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      full_name,
-      email,
-      password: hash,
+    // create user
+    const user =
+      await User.create({
+        full_name,
+        email,
+        password: hash,
 
-      // force default user
-      is_admin: false,
-    });
+        is_admin: false,
+      });
 
+    // generate tokens
+    const accessToken =
+      generateAccessToken(user);
+
+    const refreshToken =
+      generateRefreshToken(user);
+
+    // save refresh token
+    user.refresh_token =
+      refreshToken;
+
+    await user.save();
+
+    // return auth response
     return res.status(201).json({
-      id_user: user.id_user,
-      full_name: user.full_name,
-      email: user.email,
-      is_admin: user.is_admin,
+      accessToken,
+      refreshToken,
+
+      user: {
+        id_user: user.id_user,
+        full_name:
+          user.full_name,
+        email: user.email,
+        is_admin:
+          user.is_admin,
+      },
     });
 
   } catch (err) {
@@ -91,7 +114,6 @@ exports.register = async (req, res) => {
     });
   }
 };
-
 // =====================================================
 // LOGIN
 // =====================================================

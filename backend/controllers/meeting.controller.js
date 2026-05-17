@@ -37,7 +37,9 @@ exports.createMeeting = async (
     const committee =
       await db.Committee.findByPk(
         committee_id,
-        { transaction: t }
+        {
+          transaction: t,
+        }
       );
 
     if (!committee) {
@@ -57,6 +59,7 @@ exports.createMeeting = async (
             id_user:
               req.user.id_user,
           },
+
           transaction: t,
         }
       );
@@ -80,6 +83,7 @@ exports.createMeeting = async (
               id_user:
                 reporter_id,
             },
+
             transaction: t,
           }
         );
@@ -110,16 +114,20 @@ exports.createMeeting = async (
           reporter_id:
             reporter_id || null,
         },
-        { transaction: t }
+        {
+          transaction: t,
+        }
       );
 
-    // auto create draft
+    // create draft automatically
     await db.Draft.create(
       {
         id_meeting:
           meeting.id_meeting,
       },
-      { transaction: t }
+      {
+        transaction: t,
+      }
     );
 
     // creator auto member
@@ -135,7 +143,9 @@ exports.createMeeting = async (
         confirmed: true,
         attended: false,
       },
-      { transaction: t }
+      {
+        transaction: t,
+      }
     );
 
     // reporter auto member
@@ -153,8 +163,12 @@ exports.createMeeting = async (
             reporter_id,
 
           invited: true,
+          confirmed: false,
+          attended: false,
         },
-        { transaction: t }
+        {
+          transaction: t,
+        }
       );
     }
 
@@ -192,8 +206,14 @@ exports.getMeetingsByMember =
           include: [
             {
               model: db.Meeting,
+
               include: [
-                db.Committee,
+                {
+                  model:
+                    db.Committee,
+
+                  as: "committee",
+                },
               ],
             },
           ],
@@ -224,8 +244,14 @@ exports.getMeetingsGroupedByCommittee =
           include: [
             {
               model: db.Meeting,
+
               include: [
-                db.Committee,
+                {
+                  model:
+                    db.Committee,
+
+                  as: "committee",
+                },
               ],
             },
           ],
@@ -239,19 +265,19 @@ exports.getMeetingsGroupedByCommittee =
 
         if (
           !meeting ||
-          !meeting.Committee
+          !meeting.committee
         ) {
           return;
         }
 
         const cid =
-          meeting.Committee
+          meeting.committee
             .id_committee;
 
         if (!grouped[cid]) {
           grouped[cid] = {
             committee:
-              meeting.Committee,
+              meeting.committee,
 
             meetings: [],
           };
@@ -295,7 +321,6 @@ exports.addReporter = async (
     const { reporter_id } =
       req.body;
 
-    // reporter must belong to meeting
     const membership =
       await db.MeetingMember.findOne({
         where: {
@@ -362,7 +387,7 @@ exports.addMembers = async (
       });
     }
 
-    // ensure committee members
+    // ensure all users belong to committee
     const committeeMembers =
       await db.CommitteeMember.findAll({
         where: {
@@ -545,6 +570,7 @@ exports.confirmAttendance =
       return res.json({
         msg:
           "Attendance confirmed",
+
         member: mm,
       });
 
@@ -615,8 +641,159 @@ exports.validateAttendance =
       return res.json({
         msg:
           "Attendance validated",
+
         member: mm,
       });
+
+    } catch (err) {
+      return res.status(500).json({
+        msg: err.message,
+      });
+    }
+  };
+
+
+  // =====================================================
+// GET MEETING BY ID
+// =====================================================
+exports.getMeetingById =
+  async (req, res) => {
+    try {
+
+      const meeting =
+        await db.Meeting.findByPk(
+          req.params.id,
+          {
+            include: [
+              {
+                model:
+                  db.Committee,
+
+                as: "committee",
+              },
+
+              {
+                model: db.User,
+                as: "creator",
+
+                attributes: [
+                  "id_user",
+                  "full_name",
+                  "email",
+                ],
+              },
+
+              {
+                model: db.User,
+                as: "reporter",
+
+                attributes: [
+                  "id_user",
+                  "full_name",
+                  "email",
+                ],
+              },
+            ],
+          }
+        );
+
+      if (!meeting) {
+        return res.status(404).json({
+          msg: "Meeting not found",
+        });
+      }
+
+      // ensure requester belongs to meeting
+      const membership =
+        await db.MeetingMember.findOne({
+          where: {
+            id_meeting:
+              meeting.id_meeting,
+
+            id_user:
+              req.user.id_user,
+          },
+        });
+
+      if (
+        !membership &&
+        !req.user.is_admin
+      ) {
+        return res.status(403).json({
+          msg:
+            "Not allowed",
+        });
+      }
+
+      return res.json(meeting);
+
+    } catch (err) {
+      return res.status(500).json({
+        msg: err.message,
+      });
+    }
+  };
+
+
+  // =====================================================
+// GET MEETING MEMBERS
+// only creator or admin
+// =====================================================
+// =====================================================
+// GET MEETING MEMBERS
+// only creator or admin
+// =====================================================
+exports.getMeetingMembers =
+  async (req, res) => {
+    try {
+
+      const meeting =
+        await db.Meeting.findByPk(
+          req.params.id
+        );
+
+      if (!meeting) {
+        return res.status(404).json({
+          msg: "Meeting not found",
+        });
+      }
+
+      // only creator or admin
+      if (
+        meeting.creator_id !==
+          req.user.id_user &&
+        !req.user.is_admin
+      ) {
+        return res.status(403).json({
+          msg:
+            "Only creator or admin allowed",
+        });
+      }
+
+      const members =
+        await db.MeetingMember.findAll({
+          where: {
+            id_meeting:
+              meeting.id_meeting,
+          },
+
+          include: [
+            {
+              model: db.User,
+
+              as: "user",
+
+              attributes: [
+                "id_user",
+                "full_name",
+                "email",
+                "is_admin",
+              ],
+            },
+          ],
+        });
+
+      return res.json(members);
 
     } catch (err) {
       return res.status(500).json({

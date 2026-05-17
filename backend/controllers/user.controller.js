@@ -185,10 +185,10 @@ exports.switchAdmin = async (
   res
 ) => {
   try {
-    const { user_id } =
+    const { id_user } =
       req.body;
 
-    if (!user_id) {
+    if (!id_user) {
       return res.status(400).json({
         msg:
           "user_id required",
@@ -197,7 +197,7 @@ exports.switchAdmin = async (
 
     const user =
       await db.User.findByPk(
-        user_id
+        id_user
       );
 
     if (!user) {

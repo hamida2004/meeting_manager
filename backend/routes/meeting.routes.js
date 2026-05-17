@@ -1,4 +1,5 @@
-const router = require("express").Router();
+const router =
+  require("express").Router();
 
 const controller = require(
   "../controllers/meeting.controller"
@@ -6,82 +7,117 @@ const controller = require(
 
 const {
   auth,
-  isMeetingCreator,
 } = require(
   "../middlewares/auth.middleware"
 );
 
-// GET
-router.get(
-  "/mine",
-  auth(),
-  controller.getMeetingsByMember
-);
-
-router.get(
-  "/grouped",
-  auth(),
-  controller.getMeetingsGroupedByCommittee
-);
-
-// CREATE
+// =====================================================
+// CREATE MEETING
+// =====================================================
 router.post(
   "/",
   auth(),
   controller.createMeeting
 );
 
-// UPDATE
-router.patch(
+// =====================================================
+// GET MY MEETINGS
+// =====================================================
+router.get(
+  "/mine",
+  auth(),
+  controller.getMeetingsByMember
+);
+
+// =====================================================
+// GET MEETINGS GROUPED
+// =====================================================
+router.get(
+  "/grouped",
+  auth(),
+  controller.getMeetingsGroupedByCommittee
+);
+
+// =====================================================
+// GET MEETING BY ID
+// =====================================================
+router.get(
   "/:id",
   auth(),
-  isMeetingCreator,
-  controller.editMeeting
+  controller.getMeetingById
 );
 
-// DELETE
-router.delete(
-  "/:id",
+// =====================================================
+// GET MEETING MEMBERS
+// =====================================================
+router.get(
+  "/:id/members",
   auth(),
-  isMeetingCreator,
-  controller.deleteMeeting
+  controller.getMeetingMembers
 );
 
-// STATUS
-router.patch(
-  "/:id/status",
-  auth(),
-  isMeetingCreator,
-  controller.changeStatus
-);
-
-// REPORTER
-router.patch(
-  "/:id/reporter",
-  auth(),
-  isMeetingCreator,
-  controller.addReporter
-);
-
-// MEMBERS
+// =====================================================
+// ADD MEMBERS
+// =====================================================
 router.post(
   "/:id/members",
   auth(),
-  isMeetingCreator,
   controller.addMembers
 );
 
-// ATTENDANCE
+// =====================================================
+// ADD REPORTER
+// =====================================================
 router.patch(
-  "/:id/confirm-attendance",
+  "/:id/reporter",
+  auth(),
+  controller.addReporter
+);
+
+// =====================================================
+// EDIT MEETING
+// =====================================================
+router.patch(
+  "/:id",
+  auth(),
+  controller.editMeeting
+);
+
+// =====================================================
+// DELETE MEETING
+// =====================================================
+router.delete(
+  "/:id",
+  auth(),
+  controller.deleteMeeting
+);
+
+// =====================================================
+// CHANGE STATUS
+// =====================================================
+router.patch(
+  "/:id/status",
+  auth(),
+  controller.changeStatus
+);
+
+// =====================================================
+// CONFIRM ATTENDANCE
+// member confirms himself
+// =====================================================
+router.patch(
+  "/:id/confirm",
   auth(),
   controller.confirmAttendance
 );
 
+// =====================================================
+// VALIDATE ATTENDANCE
+// creator validates member
+// =====================================================
 router.patch(
-  "/:id/attendance/:memberId",
+  "/:id/validate/:memberId",
   auth(),
-  isMeetingCreator,
   controller.validateAttendance
 );
 
