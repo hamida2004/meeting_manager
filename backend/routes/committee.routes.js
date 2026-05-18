@@ -16,6 +16,7 @@ const {
 router.get(
   "/",
   auth(),
+  isAdmin,
   controller.getAllCommittees
 );
 

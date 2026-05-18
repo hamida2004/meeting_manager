@@ -100,7 +100,14 @@ router.patch(
   auth(),
   controller.changeStatus
 );
-
+// =====================================================
+// CHANGE VOTING STATE
+// =====================================================
+router.patch(
+  "/:id/voting-state",
+  auth(),
+  controller.changeVotingState
+);
 // =====================================================
 // CONFIRM ATTENDANCE
 // member confirms himself

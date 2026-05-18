@@ -538,7 +538,76 @@ exports.changeStatus = async (
     });
   }
 };
+// =====================================================
+// CHANGE VOTING STATE
+// =====================================================
+exports.changeVotingState = async (
+  req,
+  res
+) => {
+  try {
 
+    const meeting =
+      await db.Meeting.findByPk(
+        req.params.id
+      );
+
+    if (!meeting) {
+      return res.status(404).json({
+        msg: "Meeting not found",
+      });
+    }
+
+    const { voting_state } =
+      req.body;
+
+    // validate enum
+    const allowedStates = [
+      "open",
+      "closed",
+    ];
+
+    if (
+      !allowedStates.includes(
+        voting_state
+      )
+    ) {
+      return res.status(400).json({
+        msg:
+          "Invalid voting_state",
+      });
+    }
+
+    // only creator or admin
+    if (
+      meeting.creator_id !==
+        req.user.id_user &&
+      !req.user.is_admin
+    ) {
+      return res.status(403).json({
+        msg: "Not allowed",
+      });
+    }
+
+    meeting.voting_state =
+      voting_state;
+
+    await meeting.save();
+
+    return res.json({
+      msg:
+        `Voting ${voting_state}`,
+
+      meeting,
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      msg: err.message,
+    });
+  }
+};
 // =====================================================
 // MEMBER CONFIRM ATTENDANCE
 // =====================================================
