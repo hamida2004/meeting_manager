@@ -7,6 +7,7 @@ const controller = require(
 
 const {
   auth,
+  isReporter,
 } = require(
   "../middlewares/auth.middleware"
 );
@@ -17,6 +18,7 @@ const {
 router.post(
   "/meeting/:meetingId",
   auth(),
+  isReporter,
   controller.createPV
 );
 
@@ -26,6 +28,7 @@ router.post(
 router.post(
   "/meeting/:meetingId/from-draft",
   auth(),
+  isReporter,
   controller.createPVFromDraft
 );
 
@@ -44,6 +47,7 @@ router.get(
 router.post(
   "/:pvId/points",
   auth(),
+  isReporter,
   controller.addPointToPv
 );
 
@@ -53,6 +57,7 @@ router.post(
 router.patch(
   "/points/:pointId",
   auth(),
+  isReporter,
   controller.editPvPoint
 );
 
@@ -62,6 +67,7 @@ router.patch(
 router.delete(
   "/points/:pointId",
   auth(),
+  isReporter,
   controller.deletePvPoint
 );
 
@@ -71,6 +77,7 @@ router.delete(
 router.delete(
   "/:pvId",
   auth(),
+  isReporter,
   controller.deletePv
 );
 

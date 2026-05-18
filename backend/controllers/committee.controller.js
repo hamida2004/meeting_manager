@@ -318,7 +318,7 @@ exports.getCommittee = async (
   req,
   res
 ) => {
-  try {
+  try {Committee
     const committee =
       await db.Committee.findByPk(
         req.params.id,
