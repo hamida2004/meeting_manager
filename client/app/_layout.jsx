@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Stack,
@@ -9,7 +9,6 @@ import {
 
 import {
   ActivityIndicator,
-  View,
 } from "react-native";
 
 import {
@@ -17,79 +16,78 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 
+import * as Font from "expo-font";
+
+import {
+  Ionicons,
+  MaterialIcons,
+  FontAwesome,
+  AntDesign,
+} from "@expo/vector-icons";
+
 import {
   AuthProvider,
   useAuth,
 } from "../context/AuthContext";
 
-// Prevent splash from auto hiding
+// =====================================================
+// PREVENT AUTO SPLASH HIDE
+// =====================================================
 SplashScreen.preventAutoHideAsync();
 
+// =====================================================
+// GUARD — handles auth-based navigation
+// =====================================================
 function Guard() {
-  const { user, loading } =
-    useAuth();
-
+  const { user, loading } = useAuth();
   const router = useRouter();
+  const segments = useSegments();
 
-  const segments =
-    useSegments();
+  const [authRestored, setAuthRestored] = useState(false);
 
+  // Wait for auth restoration to complete
   useEffect(() => {
-    // Wait until auth restore finishes
-    if (loading) return;
-
-    // Wait until router resolves segments
-    if (!segments.length) return;
-
-    const inAuthGroup =
-      segments[0] === "(auth)";
-
-    // User NOT authenticated
-    if (
-      !user &&
-      !inAuthGroup
-    ) {
-      router.replace(
-        "/(auth)/Login"
-      );
+    if (!loading) {
+      setAuthRestored(true);
     }
+  }, [loading]);
 
-    // User authenticated
-    else if (
-      user &&
-      inAuthGroup
-    ) {
-      router.replace(
-        "/(tabs)/(Home)"
-      );
+  // Handle navigation after auth is restored
+  useEffect(() => {
+    if (!authRestored) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+
+    if (user) {
+      if (inAuthGroup) {
+        router.replace("/(tabs)/(Home)");
+      }
+    } else {
+      if (!inAuthGroup) {
+        router.replace("/(auth)/Login");
+      }
     }
+  }, [authRestored, user, segments]);
 
-    SplashScreen.hideAsync();
-  }, [
-    user,
-    loading,
-    segments,
-  ]);
+  // Hide splash screen only after auth is restored
+  useEffect(() => {
+    if (authRestored) {
+      SplashScreen.hideAsync();
+    }
+  }, [authRestored]);
 
-  if (
-    loading ||
-    !segments.length
-  ) {
+  // Show loading indicator while restoring auth
+  if (loading || !authRestored) {
     return (
       <SafeAreaView
         style={{
           flex: 1,
-          justifyContent:
-            "center",
+          justifyContent: "center",
           alignItems: "center",
-          backgroundColor:
-            "#F3F4F6",
+          backgroundColor: "#F9FAFB",
         }}
       >
-        <ActivityIndicator
-          size="large"
-          color="#4F46E5"
-        />
+        <ActivityIndicator size="large" color="#4F46E5" />
       </SafeAreaView>
     );
   }
@@ -97,31 +95,60 @@ function Guard() {
   return null;
 }
 
+// =====================================================
+// ROOT LAYOUT
+// =====================================================
 export default function RootLayout() {
-  return (
-    <SafeAreaProvider>
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        await Font.loadAsync({
+          ...Ionicons.font,
+          ...MaterialIcons.font,
+          ...FontAwesome.font,
+          ...AntDesign.font,
+        });
+      } catch (e) {
+        console.warn("Font loading error:", e);
+      } finally {
+        setFontsLoaded(true);
+      }
+    }
+
+    loadFonts();
+  }, []);
+
+  // Wait for fonts before rendering the app tree
+  if (!fontsLoaded) {
+    return (
       <SafeAreaView
         style={{
           flex: 1,
-          backgroundColor:
-            "#F3F4F6",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#F9FAFB",
         }}
       >
+        <ActivityIndicator size="large" color="#4F46E5" />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <AuthProvider>
           <Guard />
-
           <Stack
             screenOptions={{
               headerShown: false,
+              animation: "fade",
             }}
           >
-            <Stack.Screen
-              name="(auth)"
-            />
-
-            <Stack.Screen
-              name="(tabs)"
-            />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
           </Stack>
         </AuthProvider>
       </SafeAreaView>

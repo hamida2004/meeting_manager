@@ -6,306 +6,121 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
   Alert,
+  Platform,
 } from "react-native";
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
-
-import {
-  useRouter,
-} from "expo-router";
-
-import {
-  Ionicons,
-} from "@expo/vector-icons";
-
-import {
-  meetingAPI,
-  notificationAPI,
-  authAPI,
-} from "../../../services/api";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { meetingAPI, notificationAPI, authAPI } from "../../../services/api";
 
 const STATUS_COLORS = {
-  scheduled: {
-    bg: "#EEF2FF",
-    text: "#4F46E5",
-  },
-
-  ongoing: {
-    bg: "#ECFDF5",
-    text: "#059669",
-  },
-
-  completed: {
-    bg: "#F3F4F6",
-    text: "#6B7280",
-  },
-
-  cancelled: {
-    bg: "#FEF2F2",
-    text: "#DC2626",
-  },
+  scheduled: { bg: "#DBEAFE", text: "#2563EB" },
+  ongoing: { bg: "#DCFCE7", text: "#16A34A" },
+  closed: { bg: "#E5E7EB", text: "#4B5563" },
+  canceled: { bg: "#FEE2E2", text: "#DC2626" },
 };
 
-function MeetingCard({
-  meeting,
-  onPress,
-}) {
-  const status =
-    meeting.status || "scheduled";
-
-  const color =
-    STATUS_COLORS[status] ||
-    STATUS_COLORS.scheduled;
-
-  const date = meeting.timing
-    ? new Date(meeting.timing)
-    : null;
+function MeetingRow({ meeting, onPress }) {
+  const status = STATUS_COLORS[meeting.status] || STATUS_COLORS.scheduled;
+  const date = new Date(meeting.timing);
 
   return (
-    <TouchableOpacity
-      style={styles.meetingCard}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <View style={styles.meetingCardLeft}>
-        <View style={styles.dateBox}>
-          <Text style={styles.dateDay}>
-            {date
-              ? date.getDate()
-              : "--"}
-          </Text>
-
-          <Text style={styles.dateMon}>
-            {date
-              ? date.toLocaleString(
-                  "default",
-                  {
-                    month: "short",
-                  }
-                )
-              : ""}
+    <TouchableOpacity style={styles.meetingCard} activeOpacity={0.8} onPress={onPress}>
+      <View style={styles.meetingTop}>
+        <Text style={styles.meetingTitle} numberOfLines={1}>
+          {meeting.title}
+        </Text>
+        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+          <Text style={[styles.statusText, { color: status.text }]}>
+            {meeting.status}
           </Text>
         </View>
       </View>
-
-      <View style={styles.meetingCardBody}>
-        <Text
-          style={styles.meetingTitle}
-          numberOfLines={1}
-        >
-          {meeting.title ||
-            "Untitled"}
-        </Text>
-
-        <Text
-          style={
-            styles.meetingCommittee
-          }
-          numberOfLines={1}
-        >
-          {meeting.committee?.name ||
-            meeting.Committee?.name ||
-            ""}
-        </Text>
-
-        <View style={styles.timeRow}>
-          <Ionicons
-            name="time-outline"
-            size={14}
-            color="#9CA3AF"
-          />
-
-          <Text
-            style={styles.meetingTime}
-          >
-            {date
-              ? date.toLocaleTimeString(
-                  [],
-                  {
-                    hour: "2-digit",
-                    minute:
-                      "2-digit",
-                  }
-                )
-              : ""}
-          </Text>
-        </View>
+      <View style={styles.metaRow}>
+        <Ionicons name="calendar-outline" size={15} color="#6B7280" />
+        <Text style={styles.metaText}>{date.toLocaleString()}</Text>
       </View>
-
-      <View
-        style={[
-          styles.statusBadge,
-          {
-            backgroundColor:
-              color.bg,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.statusText,
-            {
-              color:
-                color.text,
-            },
-          ]}
-        >
-          {status}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function NotifItem({
-  notif,
-  onRead,
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.notifItem,
-        !notif.is_read &&
-          styles.notifUnread,
-      ]}
-      onPress={() =>
-        onRead(
-          notif.id_notification
-        )
-      }
-      activeOpacity={0.75}
-    >
-      <View
-        style={[
-          styles.notifIconWrap,
-          notif.is_read &&
-            styles.notifIconWrapRead,
-        ]}
-      >
+      <View style={styles.metaRow}>
         <Ionicons
-          name={
-            notif.is_read
-              ? "mail-open-outline"
-              : "notifications"
-          }
-          size={18}
-          color={
-            notif.is_read
-              ? "#6B7280"
-              : "#4F46E5"
-          }
+          name={meeting.meeting_type === "online" ? "globe-outline" : "business-outline"}
+          size={15}
+          color="#6B7280"
         />
+        <Text style={styles.metaText}>{meeting.meeting_type}</Text>
       </View>
-
-      <View style={styles.notifBody}>
-        <Text
-          style={[
-            styles.notifMsg,
-            notif.is_read &&
-              styles.notifMsgRead,
-          ]}
-          numberOfLines={2}
-        >
-          {notif.content}
-        </Text>
-
-        <View
-          style={styles.notifTimeRow}
-        >
-          <Ionicons
-            name="time-outline"
-            size={12}
-            color="#9CA3AF"
-          />
-
-          <Text
-            style={
-              styles.notifTime
-            }
-          >
-            {notif.createdAt
-              ? new Date(
-                  notif.createdAt
-                ).toLocaleString()
-              : ""}
-          </Text>
+      {!!meeting.site && (
+        <View style={styles.metaRow}>
+          <Ionicons name="location-outline" size={15} color="#6B7280" />
+          <Text style={styles.metaText}>{meeting.site}</Text>
         </View>
+      )}
+      <View style={styles.metaRow}>
+        <Ionicons name="stats-chart-outline" size={15} color="#6B7280" />
+        <Text style={styles.metaText}>Voting: {meeting.voting_state}</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-export default function Home() {
+export default function Meetings() {
   const router = useRouter();
+  const [groups, setGroups] = useState([]);
+  const [myMeetings, setMyMeetings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isMyMeetingsExpanded, setIsMyMeetingsExpanded] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0); // State for unread notifications
 
-  const [user, setUser] =
-    useState(null);
-
-  const [meetings, setMeetings] =
-    useState([]);
-
-  const [notifs, setNotifs] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [
-    refreshing,
-    setRefreshing,
-  ] = useState(false);
-
-  async function loadAll() {
+  // Function to fetch unread notifications count
+  async function fetchUnreadNotifications() {
     try {
-      const [
-        meRes,
-        notifRes,
-        meUser,
-      ] = await Promise.all([
-        meetingAPI.getMine(),
-        notificationAPI.getAll(),
-        authAPI.me(),
-      ]);
-
-      const sorted = (
-        meRes.data || []
-      )
-        .map((m) => m.Meeting || m)
-        .filter(
-          (m) =>
-            m.status !==
-              "cancelled" &&
-            m.status !==
-              "completed"
-        )
-        .sort(
-          (a, b) =>
-            new Date(a.timing) -
-            new Date(b.timing)
-        );
-
-      setMeetings(
-        sorted.slice(0, 5)
-      );
-
-      setNotifs(
-        (notifRes.data || []).slice(
-          0,
-          5
-        )
-      );
-
-      setUser(meUser.data);
+      const { data } = await notificationAPI.getNotifications();
+      const unread = data.filter((notif) => !notif.is_read).length; // Count unread notifications
+      setUnreadCount(unread);
+      console.log('///',unread, data,'//')
     } catch (err) {
-      Alert.alert(
-        "Error",
-        "Failed to load data."
-      );
+      console.error("Failed to fetch unread notifications:", err);
+    }
+  }
+
+
+ // CollapsibleSection Component
+function CollapsibleSection({ title, meetings, expanded, toggleExpanded }) {
+  return (
+    <View style={styles.group}>
+      <TouchableOpacity style={styles.collapsibleHeader} onPress={toggleExpanded}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
+      </TouchableOpacity>
+      {expanded &&
+        meetings.map((meeting) => (
+          <MeetingRow
+            key={meeting.Meeting.id_meeting}
+            meeting={meeting.Meeting}
+            onPress={() => router.push(`/meeting/${meeting.Meeting.id_meeting}`)}
+          />
+        ))}
+    </View>
+  );
+}
+
+
+
+  async function load() {
+    try {
+      // Fetch grouped meetings
+      const { data: groupedData } = await meetingAPI.getGrouped();
+      setGroups(groupedData || []);
+
+      // Fetch meetings created by the current user
+      const myMeetingsRes = await meetingAPI.getMine();
+      setMyMeetings(myMeetingsRes.data || []);
+    } catch (err) {
+      Alert.alert("Error", "Failed to load meetings.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -313,696 +128,149 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadAll();
+    load();
+    fetchUnreadNotifications(); // Fetch unread notifications on page load
   }, []);
 
-  const onRefresh =
-    useCallback(() => {
-      setRefreshing(true);
-      loadAll();
-    }, []);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load();
+    fetchUnreadNotifications(); // Refresh unread notifications count
+  }, []);
 
-  async function markRead(id) {
-    try {
-      await notificationAPI.markRead(
-        id
-      );
-
-      setNotifs((n) =>
-        n.map((x) =>
-          x.id_notification === id
-            ? {
-                ...x,
-                is_read: true,
-              }
-            : x
-        )
-      );
-    } catch {}
-  }
-
-  async function markAllRead() {
-    try {
-      await notificationAPI.markAllRead();
-
-      setNotifs((n) =>
-        n.map((x) => ({
-          ...x,
-          is_read: true,
-        }))
-      );
-    } catch {}
-  }
-
-  const unreadCount =
-    notifs.filter(
-      (n) => !n.is_read
-    ).length;
+  const filteredGroups = groups.map((group) => ({
+    ...group,
+    meetings: group.meetings.filter((meeting) =>
+      meeting.title.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+  }));
+  const filteredMyMeetings = myMeetings;
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator
-          size="large"
-          color="#4F46E5"
-        />
+        <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={
-        styles.container
-      }
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-        />
-      }
-      showsVerticalScrollIndicator={
-        false
-      }
-    >
-      {/* HEADER */}
+    <View style={styles.flex}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.page}>Meetings</Text>
 
-      <View style={styles.header}>
-        <View>
-          <Text
-            style={styles.greeting}
-          >
-            Welcome back
-          </Text>
-
-          <Text
-            style={styles.userName}
-          >
-            {user?.full_name ||
-              "User"}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={
-            styles.notificationBtn
-          }
-          onPress={() =>
-            router.push(
-              "/(tabs)/(Profile)/Notifications"
-            )
-          }
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={22}
-            color="#111827"
-          />
-
-          {unreadCount > 0 && (
-            <View
-              style={
-                styles.notificationBadge
-              }
-            >
-              <Text
-                style={
-                  styles.notificationBadgeText
-                }
-              >
-                {unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* STATS */}
-
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <View
-            style={
-              styles.statIconWrap
-            }
-          >
-            <Ionicons
-              name="calendar"
-              size={20}
-              color="#4F46E5"
-            />
-          </View>
-
-          <Text
-            style={styles.statNum}
-          >
-            {meetings.length}
-          </Text>
-
-          <Text
-            style={styles.statLabel}
-          >
-            Upcoming Meetings
-          </Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <View
-            style={[
-              styles.statIconWrap,
-              {
-                backgroundColor:
-                  "#ECFDF5",
-              },
-            ]}
-          >
-            <Ionicons
-              name="notifications"
-              size={20}
-              color="#059669"
-            />
-          </View>
-
-          <Text
-            style={styles.statNum}
-          >
-            {unreadCount}
-          </Text>
-
-          <Text
-            style={styles.statLabel}
-          >
-            Unread Notifications
-          </Text>
-        </View>
-      </View>
-
-      {/* MEETINGS */}
-
-      <View style={styles.section}>
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Upcoming Meetings
-          </Text>
-
+          {/* Notification Icon with Badge */}
           <TouchableOpacity
-            onPress={() =>
-              router.push(
-                "/(tabs)/(Meetings)"
-              )
-            }
+            style={styles.notificationBtn}
+            onPress={() => router.push("/(tabs)/(Profile)/Notifications")}
           >
-            <Text
-              style={styles.seeAll}
-            >
-              See all
-            </Text>
+            <Ionicons name="notifications-outline" size={22} color="#111827" />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
-        {meetings.length === 0 ? (
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-            <View
-              style={
-                styles.emptyIconWrap
-              }
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={34}
-                color="#9CA3AF"
-              />
-            </View>
+        {/* Search Bar */}
+        <TextInput
+          style={styles.searchBar}
+          placeholder="Search meetings..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
 
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              No upcoming meetings
-            </Text>
-          </View>
-        ) : (
-          meetings.map((m) => (
-            <MeetingCard
-              key={m.id_meeting}
-              meeting={m}
-              onPress={() =>
-                router.push(
-                  `/meeting/${m.id_meeting}`
-                )
-              }
-            />
-          ))
+        {/* Created by Me Section */}
+        {filteredMyMeetings.length > 0 && (
+          <CollapsibleSection
+            title="Created by Me"
+            meetings={filteredMyMeetings}
+            expanded={isMyMeetingsExpanded}
+            toggleExpanded={() => setIsMyMeetingsExpanded(!isMyMeetingsExpanded)}
+          />
         )}
-      </View>
 
-      {/* NOTIFICATIONS */}
-
-      <View style={styles.section}>
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Notifications
-          </Text>
-
-          {unreadCount > 0 && (
-            <TouchableOpacity
-              onPress={
-                markAllRead
-              }
-            >
-              <Text
-                style={
-                  styles.seeAll
-                }
-              >
-                Mark all read
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {notifs.length === 0 ? (
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-            <View
-              style={
-                styles.emptyIconWrap
-              }
-            >
-              <Ionicons
-                name="notifications-off-outline"
-                size={34}
-                color="#9CA3AF"
-              />
-            </View>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              No notifications
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={
-              styles.notifList
-            }
-          >
-            {notifs.map((n) => (
-              <NotifItem
-                key={
-                  n.id_notif
-                }
-                notif={n}
-                onRead={markRead}
+        {/* Grouped Meetings */}
+        {filteredGroups.map((group, i) => (
+          
+          <View key={i} style={styles.group}>
+            <Text style={styles.groupTitle}>{group.committee?.name}</Text>
+            {group.meetings.map((meeting) => (
+              <MeetingRow
+                key={meeting.id_meeting}
+                meeting={meeting}
+                onPress={() => router.push(`/meeting/${meeting.id_meeting}`)}
               />
             ))}
           </View>
-        )}
-      </View>
-    </ScrollView>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
+
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-  },
-
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-
+  flex: { flex: 1, backgroundColor: "#F3F4F6" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  container: { padding: 20, paddingBottom: 120 },
   header: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 28,
+    marginTop: 50,
+    marginBottom: 24,
   },
-
-  greeting: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-
-  userName: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#111827",
-    marginTop: 2,
-    letterSpacing: -0.6,
-  },
-
-  notificationBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-
-    backgroundColor: "#fff",
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    elevation: 2,
-  },
-
-  notificationBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-
-    backgroundColor: "#EF4444",
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    paddingHorizontal: 4,
-  },
-
-  notificationBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    gap: 14,
-    marginBottom: 30,
-  },
-
-  statCard: {
-    flex: 1,
-
-    backgroundColor: "#fff",
-
-    borderRadius: 22,
-
-    paddingVertical: 22,
-    paddingHorizontal: 18,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    elevation: 2,
-  },
-
-  statIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-
-    backgroundColor: "#EEF2FF",
-
-    justifyContent: "center",
-    alignItems: "center",
-
-    marginBottom: 14,
-  },
-
-  statNum: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  statLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-
-  section: {
-    marginBottom: 30,
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  seeAll: {
-    fontSize: 13,
-    color: "#4F46E5",
-    fontWeight: "700",
-  },
-
-  meetingCard: {
-    backgroundColor: "#fff",
-
-    borderRadius: 20,
-
-    padding: 16,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    marginBottom: 12,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    elevation: 2,
-  },
-
-  meetingCardLeft: {
-    marginRight: 14,
-  },
-
-  dateBox: {
-    width: 58,
-    height: 64,
-
-    backgroundColor: "#EEF2FF",
-
-    borderRadius: 18,
-
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  dateDay: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#4F46E5",
-  },
-
-  dateMon: {
-    fontSize: 11,
-    color: "#4F46E5",
-    fontWeight: "700",
-    textTransform:
-      "uppercase",
-  },
-
-  meetingCardBody: {
-    flex: 1,
-  },
-
-  meetingTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-
-  meetingCommittee: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 8,
-  },
-
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  meetingTime: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    marginLeft: 6,
-  },
-
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-
-    borderRadius: 999,
-  },
-
-  statusText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform:
-      "capitalize",
-  },
-
-  emptyCard: {
-    backgroundColor: "#fff",
-
-    borderRadius: 22,
-
-    paddingVertical: 42,
-
-    alignItems: "center",
-
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-
+  page: { fontSize: 32, fontWeight: "800", color: "#111827" },
+  searchBar: {
     backgroundColor: "#F3F4F6",
-
-    justifyContent: "center",
-    alignItems: "center",
-
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     marginBottom: 16,
   },
-
-  emptyText: {
-    fontSize: 15,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-
-  notifList: {
+  group: { marginBottom: 26 },
+  groupTitle: { fontSize: 20, fontWeight: "800", color: "#111827", marginBottom: 14 },
+  collapsibleHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  meetingCard: { backgroundColor: "#fff", borderRadius: 22, padding: 18, marginBottom: 14 },
+  meetingTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  meetingTitle: { flex: 1, fontSize: 18, fontWeight: "800", color: "#111827", marginRight: 12 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  statusText: { fontWeight: "700", fontSize: 12, textTransform: "capitalize" },
+  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  metaText: { marginLeft: 8, color: "#6B7280", fontSize: 13 },
+  notificationBtn: {
+    position: "relative",
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: "#fff",
-
-    borderRadius: 22,
-
-    overflow: "hidden",
-  },
-
-  notifItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-
-    padding: 16,
-
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-
-  notifUnread: {
-    backgroundColor: "#F8FAFF",
-  },
-
-  notifIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-
-    backgroundColor: "#EEF2FF",
-
     justifyContent: "center",
     alignItems: "center",
-
-    marginRight: 14,
   },
-
-  notifIconWrapRead: {
-    backgroundColor: "#F3F4F6",
-  },
-
-  notifBody: {
-    flex: 1,
-  },
-
-  notifMsg: {
-    fontSize: 14,
-    color: "#111827",
-    lineHeight: 20,
-    fontWeight: "600",
-  },
-
-  notifMsgRead: {
-    color: "#4B5563",
-    fontWeight: "500",
-  },
-
-  notifTimeRow: {
-    flexDirection: "row",
+  badge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FF4D4F",
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 8,
+    paddingHorizontal: 4,
   },
-
-  notifTime: {
+  badgeText: {
+    color: "#fff",
     fontSize: 12,
-    color: "#9CA3AF",
-    marginLeft: 5,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });

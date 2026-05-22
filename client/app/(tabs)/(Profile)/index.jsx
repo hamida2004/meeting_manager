@@ -33,6 +33,7 @@ import {
 } from "../../../context/AuthContext";
 
 function Avatar({ name }) {
+
   const initials = (name || "?")
     .split(" ")
     .slice(0, 2)
@@ -54,8 +55,10 @@ function InfoRow({
   label,
   value,
 }) {
+
   return (
     <View style={styles.infoRow}>
+
       <View
         style={styles.infoIconWrap}
       >
@@ -79,6 +82,7 @@ function InfoRow({
           {value ?? "—"}
         </Text>
       </View>
+
     </View>
   );
 }
@@ -89,12 +93,14 @@ function ActionRow({
   onPress,
   danger = false,
 }) {
+
   return (
     <TouchableOpacity
       style={styles.actionRow}
       onPress={onPress}
       activeOpacity={0.75}
     >
+
       <View
         style={[
           styles.actionIconWrap,
@@ -130,15 +136,20 @@ function ActionRow({
         size={18}
         color="#9CA3AF"
       />
+
     </TouchableOpacity>
   );
 }
 
 export default function Profile() {
-  const router = useRouter();
 
-  const { logout } =
-    useAuth();
+  const router =
+    useRouter();
+
+  const {
+    logout,
+    refresh,
+  } = useAuth();
 
   const [user, setUser] =
     useState(null);
@@ -151,36 +162,55 @@ export default function Profile() {
     setShowEdit,
   ] = useState(false);
 
-  const [editName, setEditName] =
-    useState("");
-
   const [saving, setSaving] =
     useState(false);
 
-  useEffect(() => {
-    authAPI
-      .me()
-      .then(({ data }) => {
-        setUser(data);
+  const [editForm, setEditForm] =
+    useState({
+      full_name: "",
+      email: "",
+    });
 
-        setEditName(
-          data?.full_name || ""
-        );
-      })
-      .catch(() =>
-        Alert.alert(
-          "Error",
+  async function loadUser() {
+
+    try {
+
+      const { data } =
+        await authAPI.me();
+
+      setUser(data);
+
+      setEditForm({
+        full_name:
+          data?.full_name || "",
+
+        email:
+          data?.email || "",
+      });
+
+    } catch (err) {
+
+      Alert.alert(
+        "Error",
+        err?.response?.data
+          ?.msg ||
           "Could not load profile."
-        )
-      )
-      .finally(() =>
-        setLoading(false)
       );
+
+    } finally {
+
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadUser();
   }, []);
 
   async function handleLogout() {
+
     Alert.alert(
-      "Logout",
+      "Sign Out",
       "Are you sure you want to sign out?",
       [
         {
@@ -193,14 +223,13 @@ export default function Profile() {
           style: "destructive",
 
           onPress: async () => {
+
             try {
-              // IMPORTANT:
-              // Context handles everything
+
               await logout();
 
-              // DO NOT navigate manually
-              // Guard handles redirect
             } catch (err) {
+
               Alert.alert(
                 "Error",
                 "Could not sign out."
@@ -213,35 +242,58 @@ export default function Profile() {
   }
 
   async function handleSave() {
-    if (!editName.trim())
+
+    if (
+      !editForm.full_name.trim() ||
+      !editForm.email.trim()
+    ) {
+      Alert.alert(
+        "Error",
+        "All fields are required."
+      );
+
       return;
+    }
 
     setSaving(true);
 
     try {
+
       await userAPI.update(
         user.id_user,
         {
           full_name:
-            editName.trim(),
+            editForm.full_name.trim(),
+
+          email:
+            editForm.email
+              .trim()
+              .toLowerCase(),
         }
       );
 
-      setUser((u) => ({
-        ...u,
-        full_name:
-          editName.trim(),
-      }));
+      await refresh();
+
+      await loadUser();
 
       setShowEdit(false);
+
+      Alert.alert(
+        "Success",
+        "Profile updated."
+      );
+
     } catch (err) {
+
       Alert.alert(
         "Error",
         err?.response?.data
-          ?.message ||
+          ?.msg ||
           "Could not update profile."
       );
+
     } finally {
+
       setSaving(false);
     }
   }
@@ -267,9 +319,9 @@ export default function Profile() {
         false
       }
     >
-      {/* HEADER */}
 
       <View style={styles.header}>
+
         <TouchableOpacity
           style={
             styles.notificationBtn
@@ -292,8 +344,7 @@ export default function Profile() {
         />
 
         <Text style={styles.name}>
-          {user?.full_name ||
-            "User"}
+          {user?.full_name}
         </Text>
 
         <Text style={styles.email}>
@@ -321,11 +372,11 @@ export default function Profile() {
             </Text>
           </View>
         )}
+
       </View>
 
-      {/* INFO */}
-
       <View style={styles.card}>
+
         <Text
           style={
             styles.cardTitle
@@ -355,11 +406,11 @@ export default function Profile() {
           label="User ID"
           value={user?.id_user}
         />
+
       </View>
 
-      {/* ACTIONS */}
-
       <View style={styles.card}>
+
         <Text
           style={
             styles.cardTitle
@@ -370,22 +421,24 @@ export default function Profile() {
 
         <ActionRow
           icon="create-outline"
-          title="Edit Name"
+          title="Edit Profile"
           onPress={() =>
             setShowEdit(true)
           }
         />
+
+        
 
         <View
           style={styles.divider}
         />
 
         <ActionRow
-          icon="key-outline"
-          title="Change Password"
+          icon="notifications-outline"
+          title="Notifications"
           onPress={() =>
             router.push(
-              "/(auth)/ResetPwd"
+              "/(tabs)/(Profile)/Notifications"
             )
           }
         />
@@ -402,6 +455,7 @@ export default function Profile() {
             handleLogout
           }
         />
+
       </View>
 
       {/* MODAL */}
@@ -411,37 +465,60 @@ export default function Profile() {
         transparent
         animationType="slide"
       >
+
         <View
           style={
             styles.modalOverlay
           }
         >
+
           <View
             style={styles.modalCard}
           >
-            <View
-              style={
-                styles.modalHandle
-              }
-            />
 
             <Text
               style={
                 styles.modalTitle
               }
             >
-              Edit Name
+              Edit Profile
             </Text>
 
             <TextInput
               style={styles.input}
-              value={editName}
-              onChangeText={
-                setEditName
+              value={
+                editForm.full_name
+              }
+              onChangeText={(v) =>
+                setEditForm((p) => ({
+                  ...p,
+                  full_name: v,
+                }))
               }
               placeholder="Full name"
               placeholderTextColor="#9CA3AF"
-              autoCapitalize="words"
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  marginTop: 14,
+                },
+              ]}
+              value={
+                editForm.email
+              }
+              onChangeText={(v) =>
+                setEditForm((p) => ({
+                  ...p,
+                  email: v,
+                }))
+              }
+              placeholder="Email"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
 
             <View
@@ -449,6 +526,7 @@ export default function Profile() {
                 styles.modalActions
               }
             >
+
               <TouchableOpacity
                 style={
                   styles.cancelBtn
@@ -478,6 +556,7 @@ export default function Profile() {
                 }
                 disabled={saving}
               >
+
                 {saving ? (
                   <ActivityIndicator
                     color="#fff"
@@ -492,11 +571,17 @@ export default function Profile() {
                     Save
                   </Text>
                 )}
+
               </TouchableOpacity>
+
             </View>
+
           </View>
+
         </View>
+
       </Modal>
+
     </ScrollView>
   );
 }

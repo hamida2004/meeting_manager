@@ -5,62 +5,127 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  RefreshControl,
+ RefreshControl,
+  Alert,
 } from "react-native";
 
-import { useEffect, useState, useCallback } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 
-import { Ionicons } from "@expo/vector-icons";
+import {
+  Ionicons,
+} from "@expo/vector-icons";
 
-import { notificationAPI } from "../../../services/api";
+import {
+  notificationAPI,
+} from "../../../services/api";
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const load = async () => {
+  const [
+    notifications,
+    setNotifications,
+  ] = useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [
+    refreshing,
+    setRefreshing,
+  ] = useState(false);
+
+  async function load() {
+
     try {
-      const { data } =
-        await notificationAPI.getAll();
 
-      setNotifications(data || []);
+      const { data } =
+        await notificationAPI.getNotifications();
+
+      setNotifications(
+        data || []
+      );
+
     } catch (err) {
-      console.log(err);
+       console.log(err)
+      Alert.alert(
+        "Error",
+        err?.response?.data
+          ?.msg ||
+          "Could not load notifications."
+      );
+
     } finally {
+
       setLoading(false);
+
       setRefreshing(false);
     }
-  };
+  }
 
   useEffect(() => {
     load();
   }, []);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    load();
-  }, []);
+  const onRefresh =
+    useCallback(() => {
 
-  const markRead = async (id) => {
+      setRefreshing(true);
+
+      load();
+
+    }, []);
+
+  async function markRead(id) {
+
     try {
-      await notificationAPI.markRead(id);
+
+      await notificationAPI.markAsRead(
+        id
+      );
 
       setNotifications((prev) =>
         prev.map((n) =>
-          n.id_notification === id
-            ? { ...n, is_read: true }
+          n.id_notif ===
+          id
+            ? {
+                ...n,
+                is_read: true,
+              }
             : n
         )
       );
+
     } catch (err) {
       console.log(err);
     }
-  };
+  }
+
+  async function markAllRead() {
+
+    try {
+
+      await notificationAPI.markAllAsRead();
+
+      setNotifications((prev) =>
+        prev.map((n) => ({
+          ...n,
+          is_read: true,
+        }))
+      );
+
+    } catch (err) {
+      console.log(err);
+    }
+  }
 
   const unreadCount =
-    notifications.filter((n) => !n.is_read)
-      .length;
+    notifications.filter(
+      (n) => !n.is_read
+    ).length;
 
   if (loading) {
     return (
@@ -75,44 +140,104 @@ export default function Notifications() {
 
   return (
     <View style={styles.flex}>
+
       <FlatList
         data={notifications}
         keyExtractor={(item) =>
-          item.id_notification.toString()
+          item.id_notif.toString()
         }
-        contentContainerStyle={styles.list}
+        contentContainerStyle={
+          styles.list
+        }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={
+              refreshing
+            }
+            onRefresh={
+              onRefresh
+            }
           />
         }
+
         ListHeaderComponent={
           <View style={styles.header}>
+
             <View>
-              <Text style={styles.pageTitle}>
+
+              <Text
+                style={
+                  styles.pageTitle
+                }
+              >
                 Notifications
               </Text>
 
-              <Text style={styles.subtitle}>
+              <Text
+                style={
+                  styles.subtitle
+                }
+              >
                 {unreadCount} unread
-                notification
-                {unreadCount !== 1 ? "s" : ""}
               </Text>
+
             </View>
 
-            <View style={styles.headerIcon}>
-              <Ionicons
-                name="notifications"
-                size={24}
-                color="#4F46E5"
-              />
+            <View
+              style={
+                styles.headerActions
+              }
+            >
+
+              {unreadCount >
+                0 && (
+                <TouchableOpacity
+                  style={
+                    styles.markAllBtn
+                  }
+                  onPress={
+                    markAllRead
+                  }
+                >
+                  <Text
+                    style={
+                      styles.markAllText
+                    }
+                  >
+                    Mark all
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <View
+                style={
+                  styles.headerIcon
+                }
+              >
+                <Ionicons
+                  name="notifications"
+                  size={24}
+                  color="#4F46E5"
+                />
+              </View>
+
             </View>
+
           </View>
         }
+
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
+          <View
+            style={
+              styles.emptyState
+            }
+          >
+
+            <View
+              style={
+                styles.emptyIconWrap
+              }
+            >
               <Ionicons
                 name="notifications-off-outline"
                 size={42}
@@ -120,29 +245,46 @@ export default function Notifications() {
               />
             </View>
 
-            <Text style={styles.emptyTitle}>
+            <Text
+              style={
+                styles.emptyTitle
+              }
+            >
               No notifications
             </Text>
 
-            <Text style={styles.emptyText}>
+            <Text
+              style={
+                styles.emptyText
+              }
+            >
               You're all caught up.
             </Text>
+
           </View>
         }
+
         renderItem={({ item }) => (
+
           <TouchableOpacity
             onPress={() =>
-              markRead(item.id_notification)
+              markRead(
+                item.id_notif
+              )
             }
             style={[
               styles.card,
-              item.is_read && styles.cardRead,
+
+              item.is_read &&
+                styles.cardRead,
             ]}
             activeOpacity={0.75}
           >
+
             <View
               style={[
                 styles.iconWrap,
+
                 item.is_read &&
                   styles.iconWrapRead,
               ]}
@@ -163,9 +305,11 @@ export default function Notifications() {
             </View>
 
             <View style={styles.body}>
+
               <Text
                 style={[
                   styles.content,
+
                   item.is_read &&
                     styles.contentRead,
                 ]}
@@ -173,25 +317,36 @@ export default function Notifications() {
                 {item.content}
               </Text>
 
-              <View style={styles.timeRow}>
+              <View
+                style={
+                  styles.timeRow
+                }
+              >
+
                 <Ionicons
                   name="time-outline"
                   size={13}
                   color="#9CA3AF"
                 />
 
-                <Text style={styles.time}>
+                <Text
+                  style={styles.time}
+                >
                   {item.createdAt
                     ? new Date(
                         item.createdAt
                       ).toLocaleString()
                     : ""}
                 </Text>
+
               </View>
+
             </View>
+
           </TouchableOpacity>
         )}
       />
+
     </View>
   );
 }
