@@ -18,6 +18,8 @@ import {
   Ionicons,
   AntDesign,
 } from "@expo/vector-icons";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 import {
   meetingAPI,
@@ -80,6 +82,7 @@ export default function MeetingDetail() {
   const [memberModalVisible, setMemberModalVisible] = useState(false);
   const [reporterModalVisible, setReporterModalVisible] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState([]);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   // ─────────────────────────────────────────────────────────
   // Load
@@ -198,6 +201,399 @@ export default function MeetingDetail() {
     currentUser?.is_admin ||
     (committee && committee.president_id === currentUser?.id_user) ||
     meeting.creator_id === currentUser?.id_user;
+
+  // ─────────────────────────────────────────────────────────
+  // PDF Export
+  // ─────────────────────────────────────────────────────────
+
+  async function exportPDF() {
+    setExportingPDF(true);
+
+    try {
+      // Fetch votes for all agenda points
+      const votesMap = {};
+      for (const point of (agenda?.points || [])) {
+        try {
+          const res = await voteAPI.getVotes(point.id_point);
+          const stats = res.data.stats;
+          votesMap[point.id_point] = {
+            agree: stats.agree || 0,
+            disagree: stats.disagree || 0,
+            abstain: stats.abstain || 0,
+          };
+        } catch {
+          votesMap[point.id_point] = { agree: 0, disagree: 0, abstain: 0 };
+        }
+      }
+
+      // Format date/time
+      const meetingDate = meeting.date
+        ? new Date(meeting.date).toLocaleDateString("ar-DZ", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+        : "غير محدد";
+
+      const startTime = meeting.start_time
+        ? new Date(`1970-01-01T${meeting.start_time}`).toLocaleTimeString("ar-DZ", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "غير محدد";
+
+      const endTime = meeting.end_time
+        ? new Date(`1970-01-01T${meeting.end_time}`).toLocaleTimeString("ar-DZ", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "غير محدد";
+
+      // Translate status
+      const statusMap = {
+        scheduled: "مجدول",
+        ongoing: "جاري",
+        closed: "مغلق",
+        canceled: "ملغى",
+      };
+
+      const stateMap = {
+        pending: "قيد الانتظار",
+        approved: "موافق عليه",
+        rejected: "مرفوض",
+        open: "مفتوح للتصويت",
+        closed: "مغلق",
+      };
+
+      // Build attendance rows
+      const attendanceRows = members
+        .map((m) => {
+          const user = m.user || m.User;
+          return `
+            <tr>
+              <td>${user?.full_name || "—"}</td>
+              <td>${m.confirmed ? "✅ مؤكد" : "❌ غير مؤكد"}</td>
+              <td>${m.attended ? "✅ حاضر" : "❌ غائب"}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      // Build agenda rows
+      const agendaRows = (agenda?.points || [])
+        .map((p, i) => {
+          const votes = votesMap[p.id_point] || { agree: 0, disagree: 0, abstain: 0 };
+          return `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${p.content}</td>
+              <td>${stateMap[p.state] || p.state}</td>
+              <td>${votes.agree}</td>
+              <td>${votes.disagree}</td>
+              <td>${votes.abstain}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      // Build PV points
+      const pvPoints = (pv?.points || [])
+        .map((p, i) => `<li>${p.content}</li>`)
+        .join("");
+
+      // HTML Template
+      const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Noto Naskh Arabic', 'Arial', sans-serif;
+      direction: rtl;
+      text-align: right;
+      padding: 40px;
+      color: #111827;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #2563EB;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 26px;
+      color: #2563EB;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #6B7280;
+      font-size: 13px;
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2563EB;
+      border-right: 4px solid #2563EB;
+      padding-right: 12px;
+      margin-bottom: 14px;
+    }
+
+    .info-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .info-item {
+      background: #F3F4F6;
+      padding: 10px 16px;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .info-item .label {
+      font-size: 11px;
+      color: #6B7280;
+      margin-bottom: 4px;
+    }
+
+    .info-item .value {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    th {
+      background: #2563EB;
+      color: #fff;
+      padding: 10px 8px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #E5E7EB;
+      text-align: center;
+    }
+
+    tr:nth-child(even) {
+      background: #F9FAFB;
+    }
+
+    .pv-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .pv-list li {
+      background: #F9FAFB;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-right: 3px solid #2563EB;
+    }
+
+    .pv-list li::before {
+      content: "• ";
+      color: #2563EB;
+      font-weight: 700;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #E5E7EB;
+      text-align: center;
+      color: #9CA3AF;
+      font-size: 11px;
+    }
+
+    .empty-msg {
+      color: #9CA3AF;
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+    }
+
+    .reporter-box {
+      background: #EFF6FF;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 10px;
+      border: 1px solid #BFDBFE;
+    }
+
+    .page-break {
+  page-break-before: always;
+  break-before: page;
+  margin-top: 40px;
+}
+
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>محضر الاجتماع</h1>
+    <p>${meeting.title}</p>
+  </div>
+
+  <!-- معلومات الاجتماع -->
+  <div class="section">
+    <div class="section-title"> معلومات الاجتماع</div>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="label">عنوان الاجتماع</div>
+        <div class="value">${meeting.title}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">اللجنة</div>
+        <div class="value">${committee?.name || "—"}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">التاريخ</div>
+        <div class="value">${meetingDate}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">التوقيت</div>
+        <div class="value">${startTime} — ${endTime}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">الحالة</div>
+        <div class="value">${statusMap[meeting.status] || meeting.status}</div>
+      </div>
+      <div class="info-item">
+        <div class="label">المقرر</div>
+        <div class="value">${meeting.reporter?.full_name || "لم يتم التعيين"}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- الحضور -->
+  <div class="section">
+    <div class="section-title"> الحضور (${members.length} عضو)</div>
+    ${
+      members.length > 0
+        ? `
+      <table>
+        <thead>
+          <tr>
+            <th>الاسم</th>
+            <th>تأكيد الحضور</th>
+            <th>الحضور الفعلي</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${attendanceRows}
+        </tbody>
+      </table>
+    `
+        : '<div class="empty-msg">لا يوجد أعضاء في هذا الاجتماع</div>'
+    }
+  </div>
+
+  <!-- جدول الأعمال -->
+  <div class="section">
+    <div class="section-title"> جدول الأعمال والتصويت</div>
+    ${
+      (agenda?.points || []).length > 0
+        ? `
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>البند</th>
+            <th>الحالة</th>
+            <th>موافق</th>
+            <th>معارض</th>
+            <th>ممتنع</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${agendaRows}
+        </tbody>
+      </table>
+    `
+        : '<div class="empty-msg">لا توجد نقاط في جدول الأعمال</div>'
+    }
+  </div>
+
+  <!-- محضر الاجتماع (PV) -->
+  <div class="section page-break">
+    <div class="section-title"> محضر الاجتماع</div>
+    ${
+      pv && (pv.points || []).length > 0
+        ? `<ul class="pv-list">${pvPoints}</ul>`
+        : pv
+        ? '<div class="empty-msg">لا توجد نقاط في المحضر</div>'
+        : '<div class="empty-msg">لم يتم إنشاء محضر الاجتماع بعد</div>'
+    }
+  </div>
+
+  <div class="footer">
+    <p>تم إنشاء هذا المحضر تلقائيًا — ${new Date().toLocaleDateString("ar-DZ", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}</p>
+  </div>
+
+</body>
+</html>
+      `;
+
+      // Generate PDF
+      const { uri } = await Print.printToFileAsync({
+        html,
+        base64: false,
+      });
+
+      // Share / Save the PDF
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "تصدير محضر الاجتماع",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("تنبيه", "لا يمكن مشاركة الملف على هذا الجهاز.");
+      }
+    } catch (err) {
+      console.error("PDF Export Error:", err);
+      Alert.alert("خطأ", "فشل في تصدير ملف PDF. يرجى المحاولة مرة أخرى.");
+    } finally {
+      setExportingPDF(false);
+    }
+  }
 
   // ─────────────────────────────────────────────────────────
   // Meeting Actions
@@ -448,29 +844,39 @@ export default function MeetingDetail() {
 
         <Text style={styles.title}>{meeting.title}</Text>
 
-        {isManager && (
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert("Delete Meeting", "Are you sure?", [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Delete",
-                  style: "destructive",
-                  onPress: async () => {
-                    try {
-                      await meetingAPI.delete(id);
-                      router.back();
-                    } catch {
-                      Alert.alert("Error");
-                    }
-                  },
-                },
-              ]);
-            }}
-          >
-            <MaterialIcons name="delete" size={24} color="#DC2626" />
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <TouchableOpacity onPress={exportPDF} disabled={exportingPDF}>
+            {exportingPDF ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : (
+              <MaterialIcons name="picture-as-pdf" size={24} color="#DC2626" />
+            )}
           </TouchableOpacity>
-        )}
+
+          {isManager && (
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert("Delete Meeting", "Are you sure?", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                      try {
+                        await meetingAPI.delete(id);
+                        router.back();
+                      } catch {
+                        Alert.alert("Error");
+                      }
+                    },
+                  },
+                ]);
+              }}
+            >
+              <MaterialIcons name="delete" size={24} color="#DC2626" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Meeting Card */}
@@ -485,6 +891,22 @@ export default function MeetingDetail() {
           label="Reporter"
           value={meeting.reporter?.full_name || "None"}
         />
+
+        {/* Export PDF Button */}
+        <TouchableOpacity
+          style={styles.exportPdfBtn}
+          onPress={exportPDF}
+          disabled={exportingPDF}
+        >
+          {exportingPDF ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <MaterialIcons name="picture-as-pdf" size={20} color="#fff" />
+              <Text style={styles.exportPdfBtnTxt}>تصدير PDF — Export PDF</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         {isManager && (
           <>
@@ -1340,4 +1762,22 @@ const styles = StyleSheet.create({
   voteCountLabel: { fontSize: 12, color: "#6B7280", marginTop: 2 },
 
   cancel: { fontSize: 12, color: "red" },
+
+  // ── Export PDF Button Styles ──
+  exportPdfBtn: {
+    backgroundColor: "#DC2626",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 16,
+  },
+  exportPdfBtnTxt: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
 });
